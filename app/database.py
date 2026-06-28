@@ -109,6 +109,49 @@ class Database:
             )
         """)
 
+        # Question answers table (Phase 3)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS question_answers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id INTEGER NOT NULL,
+                question TEXT NOT NULL,
+                answer TEXT,
+                question_type TEXT,
+                confidence TEXT,
+                source_bullets TEXT,
+                flagged INTEGER DEFAULT 0,
+                region_hint TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (job_id) REFERENCES job_queue(id)
+            )
+        """)
+
+        # Cover letters table (Phase 3)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS cover_letters (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id INTEGER NOT NULL,
+                company TEXT,
+                role TEXT,
+                cover_letter_text TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (job_id) REFERENCES job_queue(id)
+            )
+        """)
+
+        # Question bank table (Phase 3)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS question_bank (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                question_text TEXT NOT NULL UNIQUE,
+                category TEXT,
+                answer_text TEXT,
+                approved INTEGER DEFAULT 0,
+                used_count INTEGER DEFAULT 0,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
         conn.commit()
         conn.close()
         logger.info(f"Database initialized at {self.db_path}")
