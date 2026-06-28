@@ -1,0 +1,15 @@
+[Unit]
+Description=Job Application Accelerator
+After=network.target
+
+[Service]
+Type=simple
+User=%u
+WorkingDirectory=%h/job-application-accelerator
+Environment="PATH=%h/job-application-accelerator/venv/bin"
+ExecStart=%h/job-application-accelerator/venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8787
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target
