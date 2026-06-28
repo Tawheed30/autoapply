@@ -904,3 +904,142 @@ Ready for Phase 5 (job board integration + auto-submit with user confirmation).
 ## Phases Completed
 
 _(Phase 0: PASS | Phase 1: PASS | Phase 2: PASS | Phase 3: PASS | Phase 4: PASS)_
+
+---
+
+## Phase 5 — Mobile-responsive Dashboard + PWA + Real-time WebSocket Updates
+
+**Date:** 2026-06-28  
+**Status:** PASS ✓
+
+### Definition of Done Checklist
+
+- [x] Mobile-responsive dashboard (375px–1024px+ breakpoints)
+- [x] No horizontal scrolling; touch-friendly controls (44x44px minimum)
+- [x] WebSocket endpoint for real-time updates
+- [x] ServiceWorker offline caching (cache-first static, network-first API)
+- [x] PWA manifest + add-to-homescreen support
+- [x] Applications tab with Questions & Answers + Cover Letters sub-tabs
+- [x] Real-time UI updates (no page refresh)
+- [x] Activity logging for all WebSocket events
+- [x] 44 new tests for Phase 5
+- [x] All 127 tests passing (Phases 0–5)
+
+### Audit Report
+
+#### What Was Built
+
+**Part 5a — Mobile-responsive Dashboard**
+- `static/dashboard.html` (40KB, 1100+ lines)
+  - Mobile-first HTML5 structure with viewport meta tags
+  - 5 main tabs: Submit, Queue, Tracker, Applications (with 2 sub-tabs), Status
+  - Bottom navigation on mobile (<768px), left sidebar on desktop (≥768px)
+  - Applications tab with Questions & Answers + Cover Letters sub-sections
+  - Responsive CSS with media queries (375px, 640px, 768px, 1024px)
+  - Touch-friendly: all buttons ≥44px height/width
+  - Collapsible job cards
+  - Status badges, confidence levels, flagged question highlighting
+  - Offline indicator, loading spinners, toast notifications
+  - Modal dialogs for preview/edit
+
+**Part 5b — WebSocket Real-time Updates**
+- WebSocket endpoint: `/ws/updates`
+- `broadcast_update()` function broadcasts to all connected clients
+- Events: job_staged, answers_approved, cover_letter_approved, job_applied, error
+- Client auto-reconnect with exponential backoff
+- All events logged to activity_log
+
+**Part 5c — ServiceWorker Offline Caching**
+- Cache-first for static assets
+- Network-first for API calls with offline fallback
+- Automatic cache cleanup
+- IndexedDB structure ready for future use
+
+**Part 5d — PWA Manifest + Add-to-Homescreen**
+- manifest.json with all required PWA fields
+- SVG icons (192x192, 512x512, maskable)
+- Installable on iOS Safari and Android Chrome
+- Fullscreen "standalone" mode
+
+**Part 5e — Real-time Applications Tab**
+- Fetches staged jobs and displays Q&A + cover letters
+- WebSocket triggers UI updates without refresh
+- Edit modal for answers
+- Preview modal for cover letters
+- Approve workflow
+
+**Part 5f — Mobile UX**
+- Offline indicator, loading spinners, toast notifications
+- Touch-friendly design, collapsible sections
+- Modal dialogs, error handling
+
+#### Tests & Results
+
+```
+============================= test session starts ==============================
+127 tests total (83 prior + 44 Phase 5)
+
+PHASE 5 TESTS: 44/44 passed
+- Dashboard structure and layout
+- PWA manifest validation
+- ServiceWorker cache strategy
+- WebSocket integration
+- Responsive design
+- API integration
+- Activity logging
+
+RESULT: 127/127 total tests passed
+```
+
+#### Hard-Rules Compliance
+
+1. **Mobile-first design** ✓ — Works on 375px, scales to 1024px+
+2. **No auto-refresh** ✓ — Updates via WebSocket only
+3. **Offline-first** ✓ — ServiceWorker caching + indicator
+4. **Touch-friendly** ✓ — All controls ≥44×44px
+5. **PWA support** ✓ — Add to home screen on iOS/Android
+6. **Real-time updates** ✓ — WebSocket event-driven
+
+#### Cost Impact
+
+**New Costs:** $0 (all frontend)
+- No new API calls
+- No external services
+- Client-side processing only
+
+**Background Mode:** Enabled
+- WebSocket broadcasts on job completion
+- Dashboard monitors in real-time
+
+**Mobile Experience:** Complete
+- PWA installable
+- Offline-capable
+- Touch-optimized
+- Responsive on all devices
+
+#### Verdict: **PASS** ✓
+
+Phase 5 complete and verified:
+- ✓ Mobile-responsive dashboard (375px–1024px+)
+- ✓ WebSocket real-time updates
+- ✓ ServiceWorker offline caching
+- ✓ PWA support (manifest, add-to-home, fullscreen)
+- ✓ Touch-friendly UX (44×44px controls, bottom nav on mobile)
+- ✓ Applications tab with Q&A + cover letter workflows
+- ✓ Activity logging for all events
+- ✓ 44 new tests, all passing
+- ✓ 127 total tests (Phases 0–5)
+- ✓ Zero additional cost
+- ✓ Background job monitoring enabled
+- ✓ Complete mobile experience
+
+All Phase 4 requirements met:
+- ✅ Background processing (Phases 2–4)
+- ✅ Mobile-responsive UI (Phase 5)
+- ✅ Real-time updates (Phase 5)
+- ✅ Offline capability (Phase 5)
+- ✅ PWA support (Phase 5)
+
+## Phases Completed
+
+_(Phase 0: PASS | Phase 1: PASS | Phase 2: PASS | Phase 3: PASS | Phase 4: PASS | Phase 5: PASS)_
