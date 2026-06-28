@@ -46,6 +46,8 @@ def temp_master_resume(temp_db):
         yield tmpdir, master_path
 
 
+@patch('app.background_worker.CoverLetterGenerator')
+@patch('app.background_worker.QuestionDrafter')
 @patch('app.background_worker.ResumeTailor')
 @patch('app.background_worker.ResumeParser')
 @patch('app.background_worker.ExperienceBank')
@@ -55,6 +57,8 @@ def test_worker_processes_queued_job(
     mock_bank_class,
     mock_parser_class,
     mock_tailor_class,
+    mock_drafter_class,
+    mock_cl_gen_class,
     temp_db,
     mock_config,
     temp_master_resume
@@ -100,6 +104,16 @@ def test_worker_processes_queued_job(
     mock_tailor.save_diff_report.return_value = None
     mock_tailor_class.return_value = mock_tailor
 
+    mock_drafter = MagicMock()
+    mock_drafter.draft_questions.return_value = [
+        {"id": 1, "question": "Why us?", "answer": "Great company"},
+    ]
+    mock_drafter_class.return_value = mock_drafter
+
+    mock_cl_gen = MagicMock()
+    mock_cl_gen.generate_cover_letter.return_value = "Dear Hiring Manager,\n\nI am interested in this role."
+    mock_cl_gen_class.return_value = mock_cl_gen
+
     # Create a queued job
     queue_manager = JobQueueManager(temp_db)
     job_id = queue_manager.add_job(
@@ -140,8 +154,10 @@ def test_worker_processes_queued_job(
     assert len(entries) >= 1
 
 
+@patch('app.background_worker.CoverLetterGenerator')
+@patch('app.background_worker.QuestionDrafter')
 @patch('app.background_worker.ResumeTailor')
-def test_worker_handles_error(mock_tailor_class, temp_db, mock_config):
+def test_worker_handles_error(mock_tailor_class, mock_drafter_class, mock_cl_gen_class, temp_db, mock_config):
     """Test that worker gracefully handles errors."""
     # Create a queued job
     queue_manager = JobQueueManager(temp_db)
@@ -176,40 +192,42 @@ def test_worker_resilience_multiple_jobs(temp_db, mock_config):
     job2 = queue_manager.add_job(jd_text="Job 2", company="B")
 
     # Mock to fail on job1 but succeed on job2
-    with patch('app.background_worker.ResumeParser') as mock_parser_class:
-        with patch('app.background_worker.ExperienceBank'):
-            with patch('app.background_worker.JDExtractor') as mock_extractor_class:
-                with patch('app.background_worker.ResumeTailor') as mock_tailor_class:
-                    # Setup mocks
-                    mock_parser = MagicMock()
-                    mock_parser.extract_contact_info.return_value = {}
-                    mock_parser.parse_resume.return_value = {"skills": []}
-                    mock_parser_class.return_value = mock_parser
+    with patch('app.background_worker.CoverLetterGenerator'):
+        with patch('app.background_worker.QuestionDrafter'):
+            with patch('app.background_worker.ResumeParser') as mock_parser_class:
+                with patch('app.background_worker.ExperienceBank'):
+                    with patch('app.background_worker.JDExtractor') as mock_extractor_class:
+                        with patch('app.background_worker.ResumeTailor') as mock_tailor_class:
+                            # Setup mocks
+                            mock_parser = MagicMock()
+                            mock_parser.extract_contact_info.return_value = {}
+                            mock_parser.parse_resume.return_value = {"skills": []}
+                            mock_parser_class.return_value = mock_parser
 
-                    mock_extractor = MagicMock()
-                    mock_extractor.extract_keywords.return_value = []
-                    mock_extractor.extract_requirements.return_value = {
-                        "matched_keywords": [],
-                        "missing_keywords": [],
-                        "match_count": 0,
-                        "total_keywords": 0,
-                        "score": 0,
-                    }
-                    mock_extractor_class.return_value = mock_extractor
+                            mock_extractor = MagicMock()
+                            mock_extractor.extract_keywords.return_value = []
+                            mock_extractor.extract_requirements.return_value = {
+                                "matched_keywords": [],
+                                "missing_keywords": [],
+                                "match_count": 0,
+                                "total_keywords": 0,
+                                "score": 0,
+                            }
+                            mock_extractor_class.return_value = mock_extractor
 
-                    # Fail on first call, succeed on second
-                    mock_tailor = MagicMock()
-                    mock_tailor.tailor_resume.side_effect = [
-                        Exception("Error on job 1"),
-                        ("/tmp/resume.docx", []),
-                    ]
-                    mock_tailor_class.return_value = mock_tailor
+                            # Fail on first call, succeed on second
+                            mock_tailor = MagicMock()
+                            mock_tailor.tailor_resume.side_effect = [
+                                Exception("Error on job 1"),
+                                ("/tmp/resume.docx", []),
+                            ]
+                            mock_tailor_class.return_value = mock_tailor
 
-                    # Create worker and process jobs
-                    worker = BackgroundWorker(temp_db, mock_config, "test_api_key")
+                            # Create worker and process jobs
+                            worker = BackgroundWorker(temp_db, mock_config, "test_api_key")
 
-                    with patch.object(worker, '_get_master_resume_path', return_value="/tmp/master.docx"):
-                        worker.process_queued_jobs()
+                            with patch.object(worker, '_get_master_resume_path', return_value="/tmp/master.docx"):
+                                worker.process_queued_jobs()
 
     # Verify both jobs were processed (one failed, one staged)
     job1_after = queue_manager.get_job(job1)

@@ -10,6 +10,8 @@ from app.resume_parser import ResumeParser
 from app.experience_bank import ExperienceBank
 from app.jd_extractor import JDExtractor
 from app.resume_tailor import ResumeTailor
+from app.question_drafter import QuestionDrafter
+from app.cover_letter_generator import CoverLetterGenerator
 from app.config import Config
 
 logger = logging.getLogger(__name__)
@@ -105,7 +107,37 @@ class BackgroundWorker:
         diff_path = str(output_dir / f"{Path(output_filename).stem}_diff.md")
         tailor.save_diff_report(diff_path)
 
-        # Step 6: Create tracker entry
+        # Step 6: Draft questions and answers
+        parser = ResumeParser(self._get_master_resume_path())
+        resume_data = parser.parse_resume()
+        bank = ExperienceBank(self.db)
+
+        drafter = QuestionDrafter(self.api_key, self.config.get("anthropic.models.bulk_draft", "claude-haiku-4-5"))
+        questions = drafter.draft_questions(job_id, jd_text, resume_data, bank)
+        logger.info(f"Drafted {len(questions)} questions for job {job_id}")
+
+        # Step 7: Generate cover letter
+        gen = CoverLetterGenerator(self.api_key, self.config.get("anthropic.models.cover_letter", "claude-sonnet-4-6"))
+        cover_letter_text = gen.generate_cover_letter(
+            company=company or "Unknown",
+            role=role or "Unknown",
+            jd_text=jd_text,
+            resume_data=resume_data,
+            bank=bank
+        )
+
+        # Insert cover letter into database
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO cover_letters (job_id, company, role, cover_letter_text)
+            VALUES (?, ?, ?, ?)
+        """, (job_id, company or "Unknown", role or "Unknown", cover_letter_text))
+        conn.commit()
+        conn.close()
+        logger.info(f"Generated cover letter for job {job_id}")
+
+        # Step 8: Create tracker entry
         tracker_entry_id = self.tracker_manager.create_entry(
             company=company or "Unknown",
             role=role or "Unknown",
@@ -118,7 +150,7 @@ class BackgroundWorker:
             resume_version_id=None,  # Can be set when user approves
         )
 
-        # Step 7: Update job queue status
+        # Step 9: Update job queue status
         result = {
             "resume_path": tailored_path,
             "diff_path": diff_path,

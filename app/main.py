@@ -15,6 +15,8 @@ from app.logging_setup import setup_logging
 from app.job_queue import JobQueueManager
 from app.tracker import TrackerManager
 from app.background_worker import BackgroundWorker
+from app.question_answer_manager import QuestionAnswerManager
+from app.cover_letter_manager import CoverLetterManager
 
 # Load config
 config = Config()
@@ -106,6 +108,19 @@ class JobQueueRequest(BaseModel):
     company: str = None
     role: str = None
     location: str = None
+
+
+class AnswerUpdateRequest(BaseModel):
+    answer: str
+
+
+class UseBankAnswerRequest(BaseModel):
+    answer: str
+    bank_id: int
+
+
+class CoverLetterUpdateRequest(BaseModel):
+    cover_letter_text: str
 
 
 @app.post("/api/webhook/submit-jd")
@@ -204,6 +219,112 @@ def get_tracker_by_status(status: str):
     """Get tracker entries filtered by status."""
     entries = tracker_manager.get_entries_by_status(status)
     return {"entries": entries, "count": len(entries), "status": status}
+
+
+# Phase 4: Question & Answer Endpoints
+@app.get("/api/questions/{job_id}")
+def get_questions(job_id: int):
+    """Get all questions and answers for a job."""
+    try:
+        qa_manager = QuestionAnswerManager(db)
+        questions = qa_manager.get_questions_for_job(job_id)
+        return {"job_id": job_id, "questions": questions, "count": len(questions)}
+    except Exception as e:
+        logger.error(f"Error getting questions for job {job_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/questions/{job_id}/{question_id}")
+def update_answer(job_id: int, question_id: int, request: AnswerUpdateRequest):
+    """Update an answer for a question."""
+    try:
+        qa_manager = QuestionAnswerManager(db)
+        qa_manager.update_answer(question_id, request.answer)
+        logger.info(f"Updated answer for question {question_id}")
+        return {"message": "Answer updated", "question_id": question_id, "status": "success"}
+    except Exception as e:
+        logger.error(f"Error updating answer: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/questions/{job_id}/{question_id}/use-bank-answer")
+def use_bank_answer(job_id: int, question_id: int, request: UseBankAnswerRequest):
+    """Replace an answer with a bank answer."""
+    try:
+        qa_manager = QuestionAnswerManager(db)
+        qa_manager.use_bank_answer(question_id, request.answer, request.bank_id)
+        logger.info(f"Used bank answer {request.bank_id} for question {question_id}")
+        return {"message": "Bank answer used", "question_id": question_id, "status": "success"}
+    except Exception as e:
+        logger.error(f"Error using bank answer: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/questions/{job_id}/approve-all")
+def approve_all_answers(job_id: int):
+    """Approve all answers for a job with validation."""
+    try:
+        qa_manager = QuestionAnswerManager(db)
+        success, message, tracker_id = qa_manager.approve_all_answers(job_id)
+
+        if not success:
+            logger.warning(f"Failed to approve answers for job {job_id}: {message}")
+            return JSONResponse(
+                status_code=400,
+                content={"status": "validation_error", "message": message, "job_id": job_id}
+            )
+
+        logger.info(f"Approved all answers for job {job_id}")
+        return {"message": message, "job_id": job_id, "tracker_id": tracker_id, "status": "success"}
+    except Exception as e:
+        logger.error(f"Error approving answers: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Phase 4: Cover Letter Endpoints
+@app.get("/api/cover-letters/{job_id}")
+def get_cover_letter(job_id: int):
+    """Get cover letter for a job."""
+    try:
+        cl_manager = CoverLetterManager(db)
+        letter = cl_manager.get_cover_letter(job_id)
+        if not letter:
+            return {"job_id": job_id, "cover_letter": None, "status": "not_found"}
+        return {"job_id": job_id, "cover_letter": letter, "status": "success"}
+    except Exception as e:
+        logger.error(f"Error getting cover letter for job {job_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/cover-letters/{job_id}")
+def update_cover_letter(job_id: int, request: CoverLetterUpdateRequest):
+    """Update cover letter for a job."""
+    try:
+        cl_manager = CoverLetterManager(db)
+        cl_manager.update_cover_letter(job_id, request.cover_letter_text)
+        logger.info(f"Updated cover letter for job {job_id}")
+        return {"message": "Cover letter updated", "job_id": job_id, "status": "success"}
+    except Exception as e:
+        logger.error(f"Error updating cover letter: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/cover-letters/{job_id}/approve")
+def approve_cover_letter(job_id: int):
+    """Approve cover letter for a job."""
+    try:
+        cl_manager = CoverLetterManager(db)
+        success, message, word_count = cl_manager.approve_cover_letter(job_id)
+        logger.info(f"Approved cover letter for job {job_id} ({word_count} words)")
+        return {
+            "message": message,
+            "job_id": job_id,
+            "word_count": word_count,
+            "status": "success"
+        }
+    except Exception as e:
+        logger.error(f"Error approving cover letter: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/", response_class=HTMLResponse)

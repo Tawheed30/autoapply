@@ -121,6 +121,7 @@ class Database:
                 source_bullets TEXT,
                 flagged INTEGER DEFAULT 0,
                 region_hint TEXT,
+                approved INTEGER DEFAULT 0,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (job_id) REFERENCES job_queue(id)
             )
@@ -134,6 +135,7 @@ class Database:
                 company TEXT,
                 role TEXT,
                 cover_letter_text TEXT,
+                approved INTEGER DEFAULT 0,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (job_id) REFERENCES job_queue(id)
             )
