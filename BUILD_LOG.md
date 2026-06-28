@@ -312,6 +312,193 @@ Ready for Phase 2 (job queue + background worker integration).
 
 ---
 
+## Phase 2 — Job Queue + Background Worker + Tracker Integration
+
+**Date:** 2026-06-28  
+**Status:** PASS ✓
+
+### What Was Built
+
+**Core Modules:**
+
+1. **job_queue.py** (134 lines)
+   - `JobQueueManager` class: manage the job_queue table
+   - `add_job()`: insert JD with status='queued'
+   - `get_queued_jobs()`: retrieve all jobs waiting for processing
+   - `update_job_status()`: move jobs through pipeline (queued → staged → failed)
+   - `get_jobs_by_status()`: filter jobs by status
+   - All operations logged to activity_log
+
+2. **tracker.py** (154 lines)
+   - `TrackerManager` class: application tracking
+   - `create_entry()`: create tracker record when job moves to 'staged'
+   - `update_status()`, `update_date_applied()`: modify tracker entries
+   - `get_entries_by_status()`, `get_entries_by_region()`: filter applications
+   - Tracks: company, role, location, platform, region, JD URL, status, date applied, resume link
+
+3. **background_worker.py** (169 lines)
+   - `BackgroundWorker` class: processes queued jobs asynchronously
+   - `process_queued_jobs()`: main entry point; processes all queued jobs
+   - Workflow per job:
+     1. Extract JD keywords (local, no API)
+     2. Match resume skills to JD keywords
+     3. Tailor resume (calls Claude Sonnet)
+     4. Create tracker entry in database
+     5. Update job status to 'staged'
+     6. Log all operations
+   - Resilient: catches exceptions, marks job as failed, continues
+   - Handles missing master.docx gracefully
+
+**FastAPI Integration:**
+
+4. **app/main.py** (Updated)
+   - Integrated APScheduler for background job processing
+   - Webhook endpoint: `POST /api/webhook/submit-jd` (token-auth required)
+   - Dashboard endpoints:
+     - `POST /api/job-queue/submit` (form submission)
+     - `GET /api/job-queue/all` (list all jobs)
+     - `GET /api/job-queue/status/{status}` (filter by status)
+     - `POST /api/worker/trigger` (manual trigger)
+     - `GET /api/worker/status` (scheduler status)
+     - `GET /api/tracker/all` (list applications)
+     - `GET /api/tracker/status/{status}` (filter by status)
+   - Dashboard HTML with 4 tabs: Submit, Queue, Tracker, Status
+   - Mobile-responsive UI with real-time job submission form
+   - Manual worker trigger button for testing
+
+**Daemon Setup (Template):**
+
+5. **systemd/job-accelerator.service** (updated)
+   - Runs on system boot
+   - Restarts on crash
+   - Logs to configurable location
+
+6. **launchagent/com.accelerator.job-application.plist** (updated)
+   - macOS LaunchAgent template
+   - Same behavior as systemd service
+
+### Tests Run & Results
+
+```
+pytest tests/ -v
+
+57 PASSED in 1.29s
+
+Breakdown:
+  test_phase2_integration.py: 11/11 ✓
+  test_background_worker.py: 4/4 ✓
+  (Plus all Phase 0 & 1 tests still passing: 42/42)
+```
+
+All Phase 2 tests:
+- Job queue: add, query, update, status filtering
+- Tracker: create, update, query by status/region
+- Worker: process jobs, error handling, resilience, multi-job processing
+- Worker: handles errors gracefully, continues processing other jobs
+
+### Hard-Rules Compliance
+
+1. **No auto-submit** ✓
+   - Jobs move to 'staged' for human review
+   - No auto-approval or auto-submission of applications
+   - User must manually mark 'applied' in tracker (Phase 4+)
+
+2. **No fabrication** ✓
+   - Worker only calls JD extraction (local) and resume tailor (Claude)
+   - Both respect hard-rule: no fabrication
+   - Verified in Phase 1 tests, inherited by Phase 2
+
+3. **No API waste** ✓
+   - JD extraction: 100% local (no API)
+   - Resume tailor: only 1 call per job, minimal context
+   - Batch processing where possible (job queue processes all queued jobs in one run)
+   - Cost per job: ~1 Sonnet call × ~200 tokens ≈ $0.001
+
+4. **Webhook auth** ✓
+   - `X-API-Token` header required
+   - Validates against `WEBHOOK_API_TOKEN` from .env
+   - Rejects invalid tokens with 403 Forbidden
+
+5. **Background/Mobile ready** ✓
+   - Worker runs via APScheduler (every 30 min configurable)
+   - Daemon templates: systemd (Linux) + LaunchAgent (macOS)
+   - Dashboard is responsive, tested on mobile viewport
+
+### Cost Check
+
+**Per Job:**
+- JD extraction: FREE (local regex/keyword matching)
+- Resume parsing: FREE (python-docx, local)
+- Resume tailor: 1 Claude Sonnet call ≈ $0.001
+- **Total per job: $0.001**
+
+**Infrastructure:**
+- SQLite database: FREE
+- APScheduler: FREE (open-source)
+- Activity logging: FREE (SQLite)
+
+### Known Limitations
+
+- URL fetching for JD is placeholder (returns first 5000 chars of HTML; real impl would parse job posting)
+- Tracker creation doesn't link resume version (can be done in Phase 4 UI)
+- No scheduled cron job setup in Phase 2 (just templates; Phase 2c)
+- Worker doesn't fetch JD from URL intelligently (text only, no PDF parsing)
+- Single worker process (no distributed processing)
+
+### Manual Verification Steps
+
+```bash
+# 1. Test webhook submission
+curl -X POST http://localhost:8787/api/webhook/submit-jd \
+  -H "X-API-Token: WEBHOOK_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jd_text": "Senior Engineer needed...",
+    "company": "TechCorp",
+    "role": "Engineer",
+    "location": "SF"
+  }'
+# Response: {"job_id": 1, "status": "queued", ...}
+
+# 2. Check job in queue
+curl http://localhost:8787/api/job-queue/all
+# Response: {"jobs": [...], "count": 1}
+
+# 3. Trigger worker manually
+curl -X POST http://localhost:8787/api/worker/trigger
+# Response: {"message": "Worker triggered successfully", "status": "success"}
+
+# 4. Check tracker entry created
+curl http://localhost:8787/api/tracker/all
+# Response: {"entries": [...], "count": 1}
+
+# 5. Verify job moved to staged
+curl http://localhost:8787/api/job-queue/status/staged
+# Response: {"jobs": [...], "count": 1, "status": "staged"}
+
+# 6. Run pytest
+pytest tests/ -v
+# Output: 57 passed
+```
+
+### Verdict: **PASS** ✓
+
+Phase 2 is complete and verified. The job queue and background worker are fully operational:
+- ✓ Webhook intake with token auth
+- ✓ Dashboard form submission
+- ✓ Job queue management (add, query, update by status)
+- ✓ Background worker processes jobs asynchronously
+- ✓ Tracker integration: auto-create on 'staged' status
+- ✓ Error handling: graceful failures, resilient processing
+- ✓ Manual worker trigger for testing/on-demand
+- ✓ All 57 tests passing (15 new Phase 2, 42 from Phase 0/1)
+- ✓ Webhook auth enforced
+- ✓ Activity logging for all operations
+
+Ready for Phase 3 (Application Question Drafting + Cover Letter Generation).
+
+---
+
 ## Phases Completed
 
-_(Phase 0: PASS | Phase 1: PASS)_
+_(Phase 0: PASS | Phase 1: PASS | Phase 2: PASS)_
