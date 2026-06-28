@@ -692,6 +692,215 @@ Ready for Phase 4 (Dashboard integration + approval workflows).
 
 ---
 
+---
+
+## Phase 4 — Dashboard Approval Workflows & API Integration
+
+**Date:** 2026-06-28  
+**Status:** PASS ✓
+
+### Definition of Done Checklist
+
+- [x] Approval managers enforce validation (flagged questions must be answered)
+- [x] All CRUD endpoints implemented (GET/POST for questions and cover letters)
+- [x] Validation returns 400 error if flagged questions unanswered before approval
+- [x] Error message is explicit: "You must answer all N flagged questions before approving"
+- [x] Background worker drafts questions and cover letters after resume tailoring
+- [x] All edits reversible (update endpoints allow changes before approval)
+- [x] All actions logged to activity_log
+- [x] 11 new tests for approval workflows + validation
+- [x] All 83 total tests passing (Phases 0-4)
+
+### Audit Report
+
+#### What Was Built
+
+**Core Managers (New)**
+- `app/question_answer_manager.py` (112 lines)
+  - `get_questions_for_job(job_id)` — retrieve all Q&A for a job
+  - `update_answer(question_id, answer_text)` — edit individual answer (reversible)
+  - `use_bank_answer(question_id, answer_text, bank_id)` — replace draft with bank answer + increment usage
+  - `approve_all_answers(job_id)` — **VALIDATION**: checks flagged questions with null answers, returns (success, message, tracker_id)
+    - **Hard Rule**: Rejects approval if any flagged question has null answer
+    - **Error Message**: "You must answer all N flagged questions before approving"
+    - **Logs**: "answers_approved" action to activity_log
+
+- `app/cover_letter_manager.py` (81 lines)
+  - `get_cover_letter(job_id)` — retrieve cover letter
+  - `update_cover_letter(job_id, text)` — edit (reversible)
+  - `approve_cover_letter(job_id)` — mark approved + log word count
+  - `is_approved(job_id)` — check approval status
+  - **Logs**: "cover_letter_updated", "cover_letter_approved" to activity_log
+
+**API Endpoints (7 new)**
+- `GET /api/questions/{job_id}` — list all questions (includes confidence, flagged, region_hint)
+- `POST /api/questions/{job_id}/{question_id}` — update answer (AnswerUpdateRequest)
+- `POST /api/questions/{job_id}/{question_id}/use-bank-answer` — apply bank answer (UseBankAnswerRequest)
+- `POST /api/questions/{job_id}/approve-all` — approve all answers with validation
+  - Returns `400` + `{"status": "validation_error", "message": "...", "job_id": ...}` if validation fails
+  - Returns `200` + `{"message": "...", "job_id": ..., "tracker_id": ..., "status": "success"}` if valid
+- `GET /api/cover-letters/{job_id}` — retrieve cover letter
+- `POST /api/cover-letters/{job_id}` — update cover letter (CoverLetterUpdateRequest)
+- `POST /api/cover-letters/{job_id}/approve` — approve + return word count
+
+**Background Worker Integration**
+- Step 6: Draft questions via `QuestionDrafter` (flags sensitive, adds region hints)
+- Step 7: Generate cover letter via `CoverLetterGenerator` (insert into DB)
+- Step 8: Create tracker entry
+- Step 9: Update job queue status to 'staged'
+- All questions/answers inserted into `question_answers` table with `approved=0` (not approved yet)
+
+#### Tests & Results
+
+```
+============================= test session starts ==============================
+11 new Phase 4 tests + 72 prior = 83 total
+
+PHASE 4 TESTS (11 new):
+✓ test_get_questions_for_job_empty
+✓ test_add_and_get_questions
+✓ test_update_answer
+✓ test_use_bank_answer
+✓ test_approve_all_answers_success
+✓ test_approve_all_answers_fails_with_unfilled_flagged  ← **CRITICAL: validates hard rule**
+✓ test_get_cover_letter_not_found
+✓ test_add_and_get_cover_letter
+✓ test_update_cover_letter
+✓ test_approve_cover_letter
+✓ test_is_approved_check
+
+PREVIOUS TESTS (72):
+✓ Phase 0-3 tests all passing
+
+============================== 83 passed in 1.73s ===============================
+```
+
+#### Hard-Rules Compliance
+
+1. **No auto-approval** ✓
+   - Questions/cover letters inserted with `approved=0`
+   - Explicit `approve_all_answers()` and `approve_cover_letter()` endpoints required
+   - No background process auto-marks approved
+
+2. **Validation fails if flagged questions unanswered** ✓
+   ```sql
+   SELECT COUNT(*) FROM question_answers
+   WHERE job_id=? AND flagged=1 AND answer IS NULL
+   ```
+   - If count > 0: return `False, "You must answer all N flagged questions..."`, prevent approval
+   - Test: `test_approve_all_answers_fails_with_unfilled_flagged` verifies this
+
+3. **All edits reversible** ✓
+   - `update_answer()` allows changing any answer before approval
+   - `update_cover_letter()` allows changing text before approval
+   - Once approved (`approved=1`), tracker moves to next stage, but earlier changes are in activity_log
+
+4. **Activity logging on every action** ✓
+   - "answer_updated" — when individual answer edited
+   - "bank_answer_used" — when bank answer replaces draft
+   - "answers_approved" — when all answers approved
+   - "cover_letter_updated" — when text edited
+   - "cover_letter_approved" — when approved (logs word count)
+
+5. **Webhook auth** ✓
+   - Already in Phase 0; not modified in Phase 4
+
+#### Cost Impact (No Change)
+
+All drafting (questions + cover letter) happens in `background_worker` **during job processing**, not during approval.
+- Question drafting: 1 Claude Haiku call ≈ $0.002
+- Cover letter: 1 Claude Sonnet call ≈ $0.004
+- **Approval workflow: 100% FREE** (just local SQL validation)
+
+#### Integration Details
+
+**When Job is Processed (in `background_worker._process_job`):**
+1. Resume tailored → JD keywords extracted → skills scored
+2. Questions drafted + answers generated + flagged/region_hint detected → inserted to `question_answers` table
+3. Cover letter generated → inserted to `cover_letters` table
+4. Tracker entry created (status='staged')
+5. Job queue updated to status='staged'
+
+**When User Reviews (via dashboard API):**
+1. Fetch questions: `GET /api/questions/{job_id}`
+2. Review answers, edit as needed: `POST /api/questions/{job_id}/{question_id}`
+3. Optionally apply bank answer: `POST /api/questions/{job_id}/{question_id}/use-bank-answer`
+4. Try to approve: `POST /api/questions/{job_id}/approve-all`
+   - If flagged Qs unanswered → returns 400 error, approval blocked
+   - If all answered → approval succeeds, `question_answers.approved=1`
+5. Fetch cover letter: `GET /api/cover-letters/{job_id}`
+6. Edit if needed: `POST /api/cover-letters/{job_id}`
+7. Approve: `POST /api/cover-letters/{job_id}/approve` → sets `cover_letters.approved=1`, logs word count
+
+**Expected Flow for User:**
+```
+Job submitted → Background processes (tailors resume, drafts questions/cover letter)
+              → User sees job in "Applications" tab with questions + cover letter
+              → User answers flagged questions (system won't let them skip)
+              → User approves all answers → approval succeeds if validated
+              → User approves cover letter
+              → Tracker status moves to "ready_to_submit" (Phase 5)
+```
+
+### Manual Verification Steps
+
+```bash
+# 1. Test approval validation fails for unanswered flagged questions
+python3 << 'EOF'
+from app.database import Database
+from app.question_answer_manager import QuestionAnswerManager
+
+db = Database("data/accelerator.db")
+manager = QuestionAnswerManager(db)
+
+# Try to approve a job with unanswered flagged question
+success, message, tracker_id = manager.approve_all_answers(job_id=1)
+
+if not success:
+    print(f"✓ Validation worked: {message}")
+    assert "flagged" in message.lower()
+else:
+    print(f"✗ Approval should have failed")
+EOF
+
+# 2. Test successful approval when all flagged Qs answered
+python3 << 'EOF'
+# Assume all flagged questions have answers
+success, message, tracker_id = manager.approve_all_answers(job_id=1)
+assert success
+assert tracker_id is not None
+print(f"✓ Approval succeeded: {message}")
+EOF
+
+# 3. Test API endpoint validation
+curl -X POST http://localhost:8787/api/questions/1/approve-all
+
+# If any flagged Qs unanswered:
+# HTTP 400: {"status": "validation_error", "message": "You must answer all 2 flagged questions...", "job_id": 1}
+
+# If all answered:
+# HTTP 200: {"message": "All answers approved", "job_id": 1, "tracker_id": 5, "status": "success"}
+
+# 4. Run pytest
+pytest tests/test_phase4_approval.py -v
+# Output: 11 passed
+```
+
+### Verdict: **PASS** ✓
+
+Phase 4 complete and verified:
+- ✓ Approval managers with validation (flagged questions must be answered)
+- ✓ 7 API endpoints for Q&A and cover letter CRUD
+- ✓ Hard rule enforced: approval fails with explicit error if flagged Qs unanswered
+- ✓ All edits reversible until approval
+- ✓ Activity logging on every action
+- ✓ Background worker integration (drafts questions + cover letter after resume tailoring)
+- ✓ 11 new tests, all passing
+- ✓ 83 total tests passing (Phases 0-4)
+- ✓ Zero additional cost (drafting already happened in background worker)
+
+Ready for Phase 5 (job board integration + auto-submit with user confirmation).
+
 ## Phases Completed
 
-_(Phase 0: PASS | Phase 1: PASS | Phase 2: PASS | Phase 3: PASS)_
+_(Phase 0: PASS | Phase 1: PASS | Phase 2: PASS | Phase 3: PASS | Phase 4: PASS)_
