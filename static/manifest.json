@@ -1,31 +1,39 @@
 {
   "name": "Job Application Accelerator",
-  "short_name": "Job Accelerator",
-  "description": "AI-powered job application assistant",
+  "short_name": "AutoApply",
+  "description": "Accelerate your job application process with AI-powered resume tailoring and job tracking",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#2563eb",
   "orientation": "portrait-primary",
+  "theme_color": "#1f2937",
+  "background_color": "#ffffff",
+  "categories": ["productivity"],
   "icons": [
     {
-      "src": "/static/icon-192.png",
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%231f2937' width='192' height='192'/><text x='50%' y='50%' font-size='100' fill='white' text-anchor='middle' dominant-baseline='middle' font-weight='bold'>⚡</text></svg>",
       "sizes": "192x192",
-      "type": "image/png",
+      "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "/static/icon-512.png",
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect fill='%231f2937' width='512' height='512'/><text x='50%' y='50%' font-size='300' fill='white' text-anchor='middle' dominant-baseline='middle' font-weight='bold'>⚡</text></svg>",
       "sizes": "512x512",
-      "type": "image/png",
+      "type": "image/svg+xml",
       "purpose": "any"
+    },
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%231f2937' width='192' height='192'/><text x='50%' y='50%' font-size='100' fill='white' text-anchor='middle' dominant-baseline='middle' font-weight='bold'>⚡</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
     }
   ],
   "screenshots": [
     {
-      "src": "/static/screenshot-540.png",
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 540 720'><rect fill='%23f9fafb' width='540' height='720'/><text x='270' y='360' font-size='80' fill='%231f2937' text-anchor='middle' dominant-baseline='middle'>AutoApply</text></svg>",
       "sizes": "540x720",
-      "type": "image/png",
+      "type": "image/svg+xml",
       "form_factor": "narrow"
     }
   ]

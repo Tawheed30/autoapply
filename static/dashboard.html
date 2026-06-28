@@ -1,0 +1,1157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="AutoApply">
+    <meta name="theme-color" content="#1f2937">
+    <meta name="description" content="Accelerate your job application process">
+    <title>Job Application Accelerator</title>
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect fill='%231f2937' width='180' height='180'/><text x='50%' y='50%' font-size='80' fill='white' text-anchor='middle' dominant-baseline='middle'>⚡</text></svg>">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100%;
+            width: 100%;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f9fafb;
+            color: #1f2937;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .header {
+            background: white;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 0.75rem 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+            gap: 0.5rem;
+        }
+
+        .header h1 {
+            font-size: 1.25rem;
+            margin: 0;
+            flex: 1;
+        }
+
+        .offline-badge {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            background: #fee2e2;
+            color: #991b1b;
+            display: none;
+        }
+
+        .offline-badge.active {
+            display: block;
+        }
+
+        .main-content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            gap: 0;
+        }
+
+        .nav-sidebar {
+            display: none;
+            flex-direction: column;
+            width: 200px;
+            background: white;
+            border-right: 1px solid #e5e7eb;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        .nav-sidebar.visible {
+            display: flex;
+        }
+
+        .nav-tabs-mobile {
+            display: flex;
+            flex-direction: row;
+            gap: 0;
+            background: white;
+            border-top: 1px solid #e5e7eb;
+            overflow-x: auto;
+            flex-shrink: 0;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .nav-item {
+            flex: 1;
+            min-width: 80px;
+            padding: 0.75rem 0.5rem;
+            text-align: center;
+            cursor: pointer;
+            text-decoration: none;
+            color: #6b7280;
+            border: none;
+            background: none;
+            font-size: 0.875rem;
+            font-weight: 500;
+            border-bottom: 3px solid transparent;
+            white-space: nowrap;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .nav-item:active, .nav-item:focus {
+            outline: none;
+        }
+
+        .nav-item.active {
+            color: #2563eb;
+            border-bottom-color: #2563eb;
+        }
+
+        .content-area {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
+            padding: 1rem;
+        }
+
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.2s ease-in;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0.9; }
+            to { opacity: 1; }
+        }
+
+        h2 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: #374151;
+        }
+
+        input, textarea, select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+
+        button {
+            background: #2563eb;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1rem;
+            min-height: 44px;
+            min-width: 44px;
+            transition: background 0.2s;
+        }
+
+        button:hover:not(:disabled) {
+            background: #1d4ed8;
+        }
+
+        button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        button.secondary {
+            background: #e5e7eb;
+            color: #1f2937;
+        }
+
+        button.secondary:hover {
+            background: #d1d5db;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        .badge.status-queued {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .badge.status-staged {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .badge.status-failed {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .badge.status-applied {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .badge.status-approved {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .badge.flagged {
+            background: #fffacd;
+            color: #556b2f;
+            border: 1px solid #f0e68c;
+        }
+
+        .badge.confidence-high {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .badge.confidence-medium {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .badge.confidence-low {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1rem;
+            background: white;
+            border-radius: 6px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        th, td {
+            text-align: left;
+            padding: 0.75rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        th {
+            background: #f3f4f6;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+        }
+
+        tr:hover {
+            background: #f9fafb;
+        }
+
+        .job-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            margin-bottom: 1rem;
+            overflow: hidden;
+        }
+
+        .job-card-header {
+            padding: 1rem;
+            background: #f9fafb;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .job-card-header:active {
+            background: #f3f4f6;
+        }
+
+        .job-title {
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .job-meta {
+            font-size: 0.875rem;
+            color: #6b7280;
+        }
+
+        .job-card-chevron {
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.2s;
+            flex-shrink: 0;
+        }
+
+        .job-card.collapsed .job-card-chevron {
+            transform: rotate(-90deg);
+        }
+
+        .job-card-content {
+            padding: 1rem;
+            display: none;
+        }
+
+        .job-card.expanded .job-card-content {
+            display: block;
+        }
+
+        .question-item {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .question-item.flagged {
+            background: #fffacd;
+            border-color: #f0e68c;
+        }
+
+        .question-text {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .answer-text {
+            background: #f9fafb;
+            padding: 0.75rem;
+            border-radius: 4px;
+            margin-bottom: 0.5rem;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        .answer-text.empty {
+            color: #d1410c;
+            font-style: italic;
+        }
+
+        .question-meta {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .answer-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .answer-actions button {
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+        }
+
+        .sub-tabs {
+            display: flex;
+            gap: 0;
+            border-bottom: 1px solid #e5e7eb;
+            margin-bottom: 1rem;
+            background: white;
+            border-radius: 6px 6px 0 0;
+            overflow: hidden;
+        }
+
+        .sub-tab-btn {
+            flex: 1;
+            padding: 1rem;
+            border: none;
+            background: #f9fafb;
+            color: #6b7280;
+            cursor: pointer;
+            font-weight: 500;
+            border-bottom: 3px solid transparent;
+            margin: 0;
+            border-radius: 0;
+        }
+
+        .sub-tab-btn.active {
+            color: #2563eb;
+            background: white;
+            border-bottom-color: #2563eb;
+        }
+
+        .message {
+            padding: 1rem;
+            border-radius: 6px;
+            margin-bottom: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .message.success {
+            background: #dcfce7;
+            color: #166534;
+            border: 1px solid #86efac;
+        }
+
+        .message.error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fca5a5;
+        }
+
+        .message.info {
+            background: #dbeafe;
+            color: #1e40af;
+            border: 1px solid #93c5fd;
+        }
+
+        .spinner {
+            border: 2px solid #e5e7eb;
+            border-top: 2px solid #2563eb;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 0.8s linear infinite;
+            display: inline-block;
+            margin-right: 0.5rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+            animation: fadeIn 0.2s ease-in;
+        }
+
+        .modal.active {
+            display: flex;
+            align-items: flex-end;
+        }
+
+        .modal-content {
+            background-color: white;
+            padding: 1rem;
+            border-radius: 12px 12px 0 0;
+            width: 100%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 -2px 8px rgba(0,0,0,0.1);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .modal-header h3 {
+            margin: 0;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0;
+            color: #6b7280;
+            min-height: auto;
+            min-width: auto;
+        }
+
+        .region-hint {
+            background: #dbeafe;
+            border-left: 4px solid #2563eb;
+            padding: 0.75rem;
+            margin: 0.5rem 0;
+            border-radius: 4px;
+            font-size: 0.875rem;
+        }
+
+        @media (min-width: 768px) {
+            .content-area {
+                padding: 2rem;
+            }
+
+            .nav-tabs-mobile {
+                display: none;
+            }
+
+            .nav-sidebar {
+                display: flex;
+            }
+
+            .nav-item {
+                width: 100%;
+                flex: none;
+                border: none;
+                border-left: 3px solid transparent;
+                border-radius: 0;
+                padding: 1rem;
+                justify-content: flex-start;
+                min-width: auto;
+                text-align: left;
+            }
+
+            .nav-item.active {
+                border-left-color: #2563eb;
+                border-bottom: none;
+                background: #f0f4ff;
+            }
+
+            .job-card-header {
+                cursor: default;
+            }
+
+            .job-card-content {
+                display: block;
+            }
+
+            .job-card.collapsed .job-card-header {
+                cursor: pointer;
+            }
+
+            .job-card.collapsed .job-card-content {
+                display: none;
+            }
+
+            .modal {
+                align-items: center;
+                justify-content: center;
+            }
+
+            .modal-content {
+                border-radius: 8px;
+                width: 90%;
+                max-width: 600px;
+                max-height: 80vh;
+            }
+
+            .modal.active {
+                display: flex;
+            }
+        }
+
+        @media (min-width: 1024px) {
+            .content-area {
+                padding: 2rem;
+                max-width: 1200px;
+                margin: 0 auto;
+            }
+
+            .nav-sidebar {
+                width: 250px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>⚡ AutoApply</h1>
+        <div class="offline-badge" id="offlineBadge">Offline Mode</div>
+    </div>
+
+    <div class="main-content">
+        <nav class="nav-sidebar">
+            <button class="nav-item active" onclick="switchTab('submit')">📝 Submit</button>
+            <button class="nav-item" onclick="switchTab('queue')">⏳ Queue</button>
+            <button class="nav-item" onclick="switchTab('tracker')">📊 Tracker</button>
+            <button class="nav-item" onclick="switchTab('applications')">✅ Applications</button>
+            <button class="nav-item" onclick="switchTab('status')">🔧 Status</button>
+        </nav>
+
+        <div class="content-area">
+            <!-- Submit Tab -->
+            <div id="submit" class="tab-content active">
+                <h2>Submit Job Description</h2>
+                <form onsubmit="submitJob(event)">
+                    <div class="form-group">
+                        <label for="jd_text">Job Description</label>
+                        <textarea id="jd_text" placeholder="Paste the job description here..." required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="company">Company</label>
+                        <input type="text" id="company" placeholder="e.g., Google">
+                    </div>
+                    <div class="form-group">
+                        <label for="role">Role</label>
+                        <input type="text" id="role" placeholder="e.g., Senior Software Engineer">
+                    </div>
+                    <div class="form-group">
+                        <label for="location">Location</label>
+                        <input type="text" id="location" placeholder="e.g., San Francisco, CA">
+                    </div>
+                    <button type="submit">Submit & Queue</button>
+                </form>
+                <div id="submit-message"></div>
+            </div>
+
+            <!-- Queue Tab -->
+            <div id="queue" class="tab-content">
+                <h2>Job Queue</h2>
+                <div class="button-group" style="margin-bottom: 1rem;">
+                    <button onclick="loadJobs()">Refresh</button>
+                    <button class="secondary" onclick="triggerWorker()">Trigger Worker</button>
+                </div>
+                <div id="queue-list"></div>
+            </div>
+
+            <!-- Tracker Tab -->
+            <div id="tracker" class="tab-content">
+                <h2>Application Tracker</h2>
+                <button onclick="loadTracker()" style="margin-bottom: 1rem;">Refresh</button>
+                <div id="tracker-list"></div>
+            </div>
+
+            <!-- Applications Tab -->
+            <div id="applications" class="tab-content">
+                <h2>My Applications</h2>
+                <div class="sub-tabs">
+                    <button class="sub-tab-btn active" onclick="switchSubTab('questions')">Questions & Answers</button>
+                    <button class="sub-tab-btn" onclick="switchSubTab('coverletter')">Cover Letters</button>
+                </div>
+
+                <!-- Questions & Answers Sub-tab -->
+                <div id="questions" class="sub-content active">
+                    <div id="questions-list"></div>
+                </div>
+
+                <!-- Cover Letters Sub-tab -->
+                <div id="coverletter" class="sub-content">
+                    <div id="coverletter-list"></div>
+                </div>
+            </div>
+
+            <!-- Status Tab -->
+            <div id="status" class="tab-content">
+                <h2>System Status</h2>
+                <div id="status-info"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mobile Navigation -->
+    <nav class="nav-tabs-mobile">
+        <button class="nav-item active" onclick="switchTab('submit')">📝 Submit</button>
+        <button class="nav-item" onclick="switchTab('queue')">⏳ Queue</button>
+        <button class="nav-item" onclick="switchTab('tracker')">📊 Tracker</button>
+        <button class="nav-item" onclick="switchTab('applications')">✅ Apps</button>
+        <button class="nav-item" onclick="switchTab('status')">🔧 Status</button>
+    </nav>
+
+    <!-- Modals -->
+    <div id="previewModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Cover Letter Preview</h3>
+                <button class="close-btn" onclick="closeModal('previewModal')">✕</button>
+            </div>
+            <div id="previewContent"></div>
+        </div>
+    </div>
+
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Answer</h3>
+                <button class="close-btn" onclick="closeModal('editModal')">✕</button>
+            </div>
+            <textarea id="editText" style="width: 100%; min-height: 150px;"></textarea>
+            <div class="button-group" style="margin-top: 1rem;">
+                <button onclick="saveAnswer()">Save</button>
+                <button class="secondary" onclick="closeModal('editModal')">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        let currentJob = null;
+        let currentQuestionId = null;
+        let wsConnected = false;
+        let wsReconnectAttempts = 0;
+
+        // Register service worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/service-worker.js').catch(() => {
+                console.log('ServiceWorker registration failed (offline mode may not work)');
+            });
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadJobs();
+            loadTracker();
+            loadApplications();
+            loadStatus();
+            connectWebSocket();
+            updateOnlineStatus();
+            window.addEventListener('online', () => {
+                updateOnlineStatus();
+                showNotification('Back online — syncing...', 'info');
+            });
+            window.addEventListener('offline', () => {
+                updateOnlineStatus();
+                showNotification('You are offline', 'error');
+            });
+        });
+
+        function updateOnlineStatus() {
+            const badge = document.getElementById('offlineBadge');
+            if (!navigator.onLine) {
+                badge.classList.add('active');
+            } else {
+                badge.classList.remove('active');
+            }
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.getElementById(tabName).classList.add('active');
+            document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+            event.target.classList.add('active');
+
+            if (tabName === 'queue') loadJobs();
+            if (tabName === 'tracker') loadTracker();
+            if (tabName === 'applications') loadApplications();
+            if (tabName === 'status') loadStatus();
+        }
+
+        function switchSubTab(subTabName) {
+            document.querySelectorAll('.sub-content').forEach(tab => tab.classList.remove('active'));
+            document.getElementById(subTabName).classList.add('active');
+            document.querySelectorAll('.sub-tab-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+        }
+
+        async function submitJob(event) {
+            event.preventDefault();
+            const jd_text = document.getElementById('jd_text').value;
+            const company = document.getElementById('company').value;
+            const role = document.getElementById('role').value;
+            const location = document.getElementById('location').value;
+
+            try {
+                const response = await fetch('/api/job-queue/submit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ jd_text, company, role, location })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    showNotification(`Job ${data.job_id} queued successfully!`, 'success');
+                    event.target.reset();
+                } else {
+                    showNotification(data.detail || 'Error submitting job', 'error');
+                }
+            } catch (error) {
+                showNotification(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function loadJobs() {
+            try {
+                const response = await fetch('/api/job-queue/all');
+                const data = await response.json();
+
+                let html = '<table><thead><tr><th>Company</th><th>Role</th><th>Status</th><th>Created</th></tr></thead><tbody>';
+                (data.jobs || []).forEach(job => {
+                    const status = job.status || 'unknown';
+                    const created = new Date(job.created_at).toLocaleDateString();
+                    html += `<tr><td>${job.company || '-'}</td><td>${job.role || '-'}</td><td><span class="badge status-${status}">${status}</span></td><td>${created}</td></tr>`;
+                });
+                html += '</tbody></table>';
+                document.getElementById('queue-list').innerHTML = html;
+            } catch (error) {
+                document.getElementById('queue-list').innerHTML = `<div class="message error">Error loading jobs: ${error.message}</div>`;
+            }
+        }
+
+        async function loadTracker() {
+            try {
+                const response = await fetch('/api/tracker/all');
+                const data = await response.json();
+
+                let html = '';
+                (data.entries || []).forEach(entry => {
+                    const status = entry.status || 'unknown';
+                    const created = new Date(entry.created_at).toLocaleDateString();
+                    html += `<div class="job-card collapsed">
+                        <div class="job-card-header" onclick="toggleCard(this)">
+                            <div>
+                                <div class="job-title">${entry.company} - ${entry.role}</div>
+                                <div class="job-meta">${entry.location || 'Unknown'} • ${created}</div>
+                            </div>
+                            <div class="job-card-chevron">▶</div>
+                        </div>
+                        <div class="job-card-content">
+                            <p><strong>Status:</strong> <span class="badge status-${status}">${status}</span></p>
+                            <p><strong>Platform:</strong> ${entry.platform || '-'}</p>
+                            <p><strong>Region:</strong> ${entry.region || '-'}</p>
+                            <p><strong>Applied:</strong> ${entry.date_applied || 'Not applied'}</p>
+                        </div>
+                    </div>`;
+                });
+                document.getElementById('tracker-list').innerHTML = html || '<p>No tracked applications yet</p>';
+            } catch (error) {
+                document.getElementById('tracker-list').innerHTML = `<div class="message error">Error loading tracker: ${error.message}</div>`;
+            }
+        }
+
+        async function loadApplications() {
+            try {
+                const queueResponse = await fetch('/api/job-queue/status/staged');
+                const queueData = await queueResponse.json();
+
+                let questionsHtml = '';
+                let coverLettersHtml = '';
+
+                for (const job of (queueData.jobs || [])) {
+                    const qResponse = await fetch(`/api/questions/${job.id}`);
+                    const qData = await qResponse.json();
+                    const clResponse = await fetch(`/api/cover-letters/${job.id}`);
+                    const clData = await clResponse.json();
+
+                    // Questions section
+                    if (qData.questions && qData.questions.length > 0) {
+                        questionsHtml += `<div class="job-card">
+                            <div class="job-card-header">
+                                <div>
+                                    <div class="job-title">${job.company || 'Unknown'} - ${job.role || 'Unknown'}</div>
+                                    <div class="job-meta">${job.location || 'Unknown'}</div>
+                                </div>
+                            </div>
+                            <div class="job-card-content">`;
+
+                        qData.questions.forEach(q => {
+                            const isFlagged = q.flagged;
+                            const hasAnswer = q.answer && q.answer.trim().length > 0;
+                            questionsHtml += `<div class="question-item ${isFlagged ? 'flagged' : ''}">
+                                <div class="question-text">${q.question}</div>
+                                <div class="question-meta">
+                                    <span class="badge confidence-${q.confidence}">${q.confidence || 'unknown'}</span>
+                                    ${isFlagged ? '<span class="badge flagged">⚠️ Flagged</span>' : ''}
+                                </div>
+                                <div class="answer-text ${!hasAnswer ? 'empty' : ''}">${hasAnswer ? q.answer : 'REQUIRES YOUR INPUT'}</div>
+                                ${isFlagged && q.region_hint ? `<div class="region-hint">📍 ${q.region_hint}</div>` : ''}
+                                <div class="answer-actions">
+                                    <button onclick="editAnswer(${q.id}, '${job.id}')">Edit</button>
+                                    <button class="secondary" onclick="showSourceBullets(${q.id})">Source</button>
+                                </div>
+                            </div>`;
+                        });
+
+                        questionsHtml += `<button onclick="approveAnswers(${job.id})">Approve All Answers</button>
+                            </div>
+                        </div>`;
+                    }
+
+                    // Cover letters section
+                    if (clData.cover_letter) {
+                        const wordCount = clData.cover_letter.cover_letter_text.split(/\s+/).length;
+                        coverLettersHtml += `<div class="job-card">
+                            <div class="job-card-header">
+                                <div>
+                                    <div class="job-title">${job.company || 'Unknown'} - ${job.role || 'Unknown'}</div>
+                                    <div class="job-meta">${job.location || 'Unknown'} • ${wordCount} words</div>
+                                </div>
+                            </div>
+                            <div class="job-card-content">
+                                <textarea readonly style="margin-bottom: 1rem;">${clData.cover_letter.cover_letter_text}</textarea>
+                                <div class="button-group">
+                                    <button onclick="editCoverLetter(${job.id})">Edit</button>
+                                    <button class="secondary" onclick="previewCoverLetter('${job.company}', '${job.role}', ${job.id})">Preview</button>
+                                    <button onclick="approveCoverLetter(${job.id})">Approve</button>
+                                </div>
+                            </div>
+                        </div>`;
+                    }
+                }
+
+                document.getElementById('questions-list').innerHTML = questionsHtml || '<p>No pending questions</p>';
+                document.getElementById('coverletter-list').innerHTML = coverLettersHtml || '<p>No pending cover letters</p>';
+            } catch (error) {
+                console.error('Error loading applications:', error);
+            }
+        }
+
+        async function loadStatus() {
+            try {
+                const health = await fetch('/health').then(r => r.json());
+                const worker = await fetch('/api/worker/status').then(r => r.json());
+
+                let html = `<div style="background: white; padding: 1rem; border-radius: 6px; margin-bottom: 1rem;">
+                    <p><strong>API Key:</strong> ${health.api_key_present ? '✓ Present' : '✗ Missing'}</p>
+                    <p><strong>Scheduler:</strong> ${health.scheduler_running ? '✓ Running' : '✗ Stopped'}</p>
+                    <p><strong>WebSocket:</strong> ${wsConnected ? '✓ Connected' : '✗ Disconnected'}</p>
+                    <p><strong>Online:</strong> ${navigator.onLine ? '✓ Yes' : '✗ No'}</p>
+                </div>`;
+
+                if (worker.scheduler_jobs && worker.scheduler_jobs.length > 0) {
+                    html += '<h3>Scheduled Jobs</h3>';
+                    html += '<ul style="background: white; padding: 1rem; border-radius: 6px;">';
+                    worker.scheduler_jobs.forEach(job => {
+                        html += `<li>${job.name} (Next: ${new Date(job.next_run_time).toLocaleString()})</li>`;
+                    });
+                    html += '</ul>';
+                }
+
+                document.getElementById('status-info').innerHTML = html;
+            } catch (error) {
+                document.getElementById('status-info').innerHTML = `<div class="message error">Error loading status: ${error.message}</div>`;
+            }
+        }
+
+        function toggleCard(header) {
+            const card = header.closest('.job-card');
+            card.classList.toggle('collapsed');
+            card.classList.toggle('expanded');
+        }
+
+        function editAnswer(questionId, jobId) {
+            currentQuestionId = questionId;
+            currentJob = jobId;
+            // Fetch current answer
+            fetch(`/api/questions/${jobId}`)
+                .then(r => r.json())
+                .then(data => {
+                    const q = data.questions.find(qq => qq.id === questionId);
+                    document.getElementById('editText').value = q.answer || '';
+                    openModal('editModal');
+                });
+        }
+
+        function saveAnswer() {
+            const text = document.getElementById('editText').value;
+            fetch(`/api/questions/${currentJob}/${currentQuestionId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ answer: text })
+            }).then(r => r.json())
+            .then(() => {
+                closeModal('editModal');
+                loadApplications();
+                showNotification('Answer saved', 'success');
+            })
+            .catch(err => showNotification(`Error: ${err.message}`, 'error'));
+        }
+
+        function editCoverLetter(jobId) {
+            // Similar to editAnswer
+            showNotification('Edit cover letter functionality coming soon', 'info');
+        }
+
+        function previewCoverLetter(company, role, jobId) {
+            fetch(`/api/cover-letters/${jobId}`)
+                .then(r => r.json())
+                .then(data => {
+                    const letter = data.cover_letter.cover_letter_text;
+                    document.getElementById('previewContent').innerHTML = `
+                        <div style="border: 1px solid #e5e7eb; padding: 2rem; border-radius: 6px; line-height: 1.6; white-space: pre-wrap; font-family: serif;">
+                            ${letter}
+                        </div>
+                    `;
+                    openModal('previewModal');
+                });
+        }
+
+        async function approveAnswers(jobId) {
+            try {
+                const response = await fetch(`/api/questions/${jobId}/approve-all`, { method: 'POST' });
+                const data = await response.json();
+                if (response.ok) {
+                    showNotification('All answers approved!', 'success');
+                    loadApplications();
+                } else {
+                    showNotification(data.message, 'error');
+                }
+            } catch (error) {
+                showNotification(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function approveCoverLetter(jobId) {
+            try {
+                const response = await fetch(`/api/cover-letters/${jobId}/approve`, { method: 'POST' });
+                const data = await response.json();
+                if (response.ok) {
+                    showNotification('Cover letter approved!', 'success');
+                    loadApplications();
+                } else {
+                    showNotification(data.message, 'error');
+                }
+            } catch (error) {
+                showNotification(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        function showSourceBullets(questionId) {
+            showNotification('Source bullets viewer coming soon', 'info');
+        }
+
+        function openModal(modalId) {
+            document.getElementById(modalId).classList.add('active');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+
+        async function triggerWorker() {
+            try {
+                const response = await fetch('/api/worker/trigger', { method: 'POST' });
+                const data = await response.json();
+                showNotification('Worker triggered!', 'success');
+                setTimeout(loadJobs, 2000);
+            } catch (error) {
+                showNotification(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        function showNotification(message, type = 'info') {
+            const container = document.querySelector('.content-area');
+            const msg = document.createElement('div');
+            msg.className = `message ${type}`;
+            msg.innerHTML = `<span>${message}</span><button class="close-btn" onclick="this.parentElement.remove()">✕</button>`;
+            container.insertBefore(msg, container.firstChild);
+            setTimeout(() => msg.remove(), 5000);
+        }
+
+        // WebSocket connection
+        function connectWebSocket() {
+            if (!('WebSocket' in window)) {
+                console.log('WebSocket not supported');
+                return;
+            }
+
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const ws = new WebSocket(`${protocol}//${window.location.host}/ws/updates`);
+
+            ws.onopen = () => {
+                console.log('WebSocket connected');
+                wsConnected = true;
+                wsReconnectAttempts = 0;
+                updateOnlineStatus();
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleWebSocketMessage(data);
+            };
+
+            ws.onclose = () => {
+                console.log('WebSocket disconnected');
+                wsConnected = false;
+                updateOnlineStatus();
+                // Auto-reconnect with exponential backoff
+                if (wsReconnectAttempts < 5) {
+                    const delay = Math.min(1000 * Math.pow(2, wsReconnectAttempts), 30000);
+                    wsReconnectAttempts++;
+                    setTimeout(connectWebSocket, delay);
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+            };
+        }
+
+        function handleWebSocketMessage(data) {
+            console.log('WebSocket message:', data);
+            switch(data.event) {
+                case 'job_staged':
+                    showNotification(`Job ${data.job_id} is ready for review!`, 'success');
+                    loadJobs();
+                    loadApplications();
+                    break;
+                case 'answers_approved':
+                    showNotification(`Answers approved for job ${data.job_id}`, 'success');
+                    loadApplications();
+                    break;
+                case 'cover_letter_approved':
+                    showNotification(`Cover letter approved for job ${data.job_id}`, 'success');
+                    loadApplications();
+                    break;
+                case 'job_applied':
+                    showNotification(`Job ${data.job_id} submitted!`, 'success');
+                    loadTracker();
+                    break;
+                case 'error':
+                    showNotification(`Error: ${data.message}`, 'error');
+                    break;
+            }
+        }
+    </script>
+</body>
+</html>

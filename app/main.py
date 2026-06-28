@@ -1,13 +1,14 @@
 import logging
 import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Header
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, HTTPException, Header, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 import json
+from typing import Set
 
 from app.config import Config
 from app.database import Database
@@ -41,6 +42,9 @@ tracker_manager = TrackerManager(db)
 # Initialize scheduler
 scheduler = BackgroundScheduler(daemon=True)
 scheduler_running = False
+
+# WebSocket connections for real-time updates
+active_connections: Set[WebSocket] = set()
 
 
 @asynccontextmanager
@@ -327,9 +331,67 @@ def approve_cover_letter(job_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/", response_class=HTMLResponse)
-def dashboard():
+@app.get("/")
+async def dashboard():
     """Serve the dashboard homepage."""
+    dashboard_path = os.path.join("static", "dashboard.html")
+    if os.path.exists(dashboard_path):
+        return FileResponse(dashboard_path, media_type="text/html")
+    return HTMLResponse("<h1>Dashboard file not found</h1>", status_code=404)
+
+
+@app.websocket("/ws/updates")
+async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for real-time updates."""
+    await websocket.accept()
+    active_connections.add(websocket)
+    logger.info(f"WebSocket client connected. Total clients: {len(active_connections)}")
+    db.log_activity("websocket_connected", "ws_endpoint", f"Clients: {len(active_connections)}", "success")
+
+    try:
+        while True:
+            # Keep connection alive and listen for messages
+            data = await websocket.receive_text()
+            # Echo back or process client messages if needed
+            logger.debug(f"WebSocket message received: {data}")
+    except WebSocketDisconnect:
+        active_connections.discard(websocket)
+        logger.info(f"WebSocket client disconnected. Total clients: {len(active_connections)}")
+        db.log_activity("websocket_disconnected", "ws_endpoint", f"Clients: {len(active_connections)}", "success")
+    except Exception as e:
+        active_connections.discard(websocket)
+        logger.error(f"WebSocket error: {e}")
+        db.log_activity("websocket_error", "ws_endpoint", str(e), "error")
+
+
+async def broadcast_update(event: str, job_id: int, data: dict = None):
+    """Broadcast update to all connected WebSocket clients."""
+    payload = {
+        "event": event,
+        "job_id": job_id,
+        "data": data or {}
+    }
+    message = json.dumps(payload)
+
+    disconnected = set()
+    for connection in active_connections:
+        try:
+            await connection.send_text(message)
+        except Exception as e:
+            logger.error(f"Failed to send WebSocket message: {e}")
+            disconnected.add(connection)
+
+    # Clean up disconnected clients
+    for connection in disconnected:
+        active_connections.discard(connection)
+
+    logger.info(f"Broadcast '{event}' to {len(active_connections)} clients for job {job_id}")
+    db.log_activity(f"broadcast_{event}", f"job_id:{job_id}", f"Clients: {len(active_connections)}", "success")
+
+
+# Old HTML placeholder (can be removed later)
+def old_dashboard_html():
+    """Old inline HTML dashboard (replaced by static file)."""
     return """
     <!DOCTYPE html>
     <html lang="en">
