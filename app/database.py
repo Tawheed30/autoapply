@@ -102,10 +102,9 @@ class Database:
             CREATE TABLE IF NOT EXISTS experience_bank (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 category TEXT NOT NULL,
-                company TEXT,
-                role TEXT,
                 content TEXT NOT NULL,
                 themes TEXT,
+                role_source TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
