@@ -2,14 +2,19 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Header
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.interval import IntervalTrigger
 import json
 
 from app.config import Config
 from app.database import Database
 from app.logging_setup import setup_logging
+from app.job_queue import JobQueueManager
+from app.tracker import TrackerManager
+from app.background_worker import BackgroundWorker
 
 # Load config
 config = Config()
@@ -27,13 +32,44 @@ logger = logging.getLogger(__name__)
 # Initialize database
 db = Database(config.get("data.db_path"))
 
+# Initialize managers
+queue_manager = JobQueueManager(db)
+tracker_manager = TrackerManager(db)
+
+# Initialize scheduler
+scheduler = BackgroundScheduler(daemon=True)
+scheduler_running = False
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global scheduler_running
     logger.info("Application startup")
     db.log_activity("app_startup", "main", "FastAPI app started")
+
+    # Start the background scheduler
+    try:
+        interval_minutes = config.get("background.job_queue_interval_minutes", 30)
+        worker = BackgroundWorker(db, config, config.get_api_key())
+        scheduler.add_job(
+            worker.process_queued_jobs,
+            trigger=IntervalTrigger(minutes=interval_minutes),
+            id='process_queued_jobs',
+            name='Process Queued Jobs',
+            replace_existing=True,
+        )
+        scheduler.start()
+        scheduler_running = True
+        logger.info(f"Background scheduler started (interval: {interval_minutes} minutes)")
+    except Exception as e:
+        logger.error(f"Failed to start scheduler: {e}")
+
     yield
+
     logger.info("Application shutdown")
+    if scheduler_running:
+        scheduler.shutdown()
+        logger.info("Background scheduler stopped")
     db.log_activity("app_shutdown", "main", "FastAPI app stopped")
 
 
@@ -50,6 +86,7 @@ class HealthResponse(BaseModel):
     status: str
     version: str
     api_key_present: bool
+    scheduler_running: bool
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -58,7 +95,8 @@ def health_check():
     return HealthResponse(
         status="healthy",
         version="0.1.0",
-        api_key_present=bool(config.get_api_key())
+        api_key_present=bool(config.get_api_key()),
+        scheduler_running=scheduler_running
     )
 
 
@@ -81,7 +119,7 @@ def submit_jd(request: JobQueueRequest, x_api_token: str = Header(None)):
     if not request.jd_text and not request.jd_url:
         raise HTTPException(status_code=400, detail="Either jd_text or jd_url is required")
 
-    job_id = db.add_job_to_queue(
+    job_id = queue_manager.add_job(
         jd_text=request.jd_text,
         jd_url=request.jd_url,
         company=request.company,
@@ -95,6 +133,77 @@ def submit_jd(request: JobQueueRequest, x_api_token: str = Header(None)):
         "status": "queued",
         "message": "Job successfully queued for processing"
     }
+
+
+@app.post("/api/job-queue/submit")
+def submit_jd_dashboard(request: JobQueueRequest):
+    """Dashboard endpoint to submit a job description."""
+    if not request.jd_text and not request.jd_url:
+        raise HTTPException(status_code=400, detail="Either jd_text or jd_url is required")
+
+    job_id = queue_manager.add_job(
+        jd_text=request.jd_text,
+        jd_url=request.jd_url,
+        company=request.company,
+        role=request.role,
+        location=request.location
+    )
+
+    logger.info(f"Job {job_id} queued via dashboard")
+    return {
+        "job_id": job_id,
+        "status": "queued",
+        "message": "Job successfully queued for processing"
+    }
+
+
+@app.get("/api/job-queue/all")
+def get_all_jobs():
+    """Get all jobs in the queue."""
+    jobs = queue_manager.get_all_jobs()
+    return {"jobs": jobs, "count": len(jobs)}
+
+
+@app.get("/api/job-queue/status/{status}")
+def get_jobs_by_status(status: str):
+    """Get jobs filtered by status."""
+    jobs = queue_manager.get_jobs_by_status(status)
+    return {"jobs": jobs, "count": len(jobs), "status": status}
+
+
+@app.post("/api/worker/trigger")
+def trigger_worker():
+    """Manually trigger the background worker."""
+    try:
+        worker = BackgroundWorker(db, config, config.get_api_key())
+        worker.process_queued_jobs()
+        return {"message": "Worker triggered successfully", "status": "success"}
+    except Exception as e:
+        logger.error(f"Error triggering worker: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Worker error: {str(e)}")
+
+
+@app.get("/api/worker/status")
+def get_worker_status():
+    """Get background worker status."""
+    return {
+        "scheduler_running": scheduler_running,
+        "scheduler_jobs": [{"id": job.id, "name": job.name, "next_run_time": str(job.next_run_time)} for job in scheduler.get_jobs()],
+    }
+
+
+@app.get("/api/tracker/all")
+def get_all_tracker_entries():
+    """Get all tracker entries."""
+    entries = tracker_manager.get_all_entries()
+    return {"entries": entries, "count": len(entries)}
+
+
+@app.get("/api/tracker/status/{status}")
+def get_tracker_by_status(status: str):
+    """Get tracker entries filtered by status."""
+    entries = tracker_manager.get_entries_by_status(status)
+    return {"entries": entries, "count": len(entries), "status": status}
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -117,99 +226,349 @@ def dashboard():
                 box-sizing: border-box;
             }
             body {
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                min-height: 100vh;
-                display: flex;
-                align-items: center;
-                justify-content: center;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                background: #f9fafb;
+                color: #1f2937;
+            }
+            .navbar {
+                background: white;
+                border-bottom: 1px solid #e5e7eb;
                 padding: 1rem;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            .navbar h1 {
+                font-size: 1.5rem;
+                margin: 0;
+            }
+            .nav-links {
+                display: flex;
+                gap: 1rem;
+                list-style: none;
+            }
+            .nav-links a {
+                color: #2563eb;
+                text-decoration: none;
+                cursor: pointer;
+                padding: 0.5rem 1rem;
+                border-radius: 4px;
+            }
+            .nav-links a:hover {
+                background: #f0f4ff;
+            }
+            .nav-links a.active {
+                background: #dbeafe;
+                font-weight: 600;
             }
             .container {
-                background: white;
-                border-radius: 12px;
-                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-                padding: 2rem;
-                max-width: 600px;
-                width: 100%;
-                text-align: center;
+                max-width: 1200px;
+                margin: 0 auto;
+                padding: 2rem 1rem;
             }
-            h1 {
-                color: #1f2937;
+            .tab-content {
+                display: none;
+            }
+            .tab-content.active {
+                display: block;
+            }
+            .form-group {
+                margin-bottom: 1rem;
+            }
+            label {
+                display: block;
                 margin-bottom: 0.5rem;
-                font-size: 2rem;
-            }
-            .subtitle {
-                color: #6b7280;
-                margin-bottom: 2rem;
-                font-size: 1.1rem;
-            }
-            .status {
-                background: #f0fdf4;
-                border: 1px solid #86efac;
-                color: #166534;
-                padding: 1rem;
-                border-radius: 8px;
-                margin-bottom: 2rem;
                 font-weight: 500;
-            }
-            .status.error {
-                background: #fef2f2;
-                border-color: #fca5a5;
-                color: #991b1b;
-            }
-            .feature-list {
-                text-align: left;
-                margin-bottom: 2rem;
-            }
-            .feature-list li {
-                list-style: none;
-                padding: 0.75rem 0;
-                border-bottom: 1px solid #f3f4f6;
                 color: #374151;
             }
-            .feature-list li:last-child {
-                border-bottom: none;
+            input, textarea {
+                width: 100%;
+                padding: 0.75rem;
+                border: 1px solid #d1d5db;
+                border-radius: 6px;
+                font-family: inherit;
+                font-size: 1rem;
             }
-            .feature-list li:before {
-                content: "✓ ";
-                color: #10b981;
-                font-weight: bold;
-                margin-right: 0.5rem;
+            textarea {
+                min-height: 150px;
+                resize: vertical;
             }
-            .footer {
-                color: #9ca3af;
-                font-size: 0.9rem;
+            button {
+                background: #2563eb;
+                color: white;
+                padding: 0.75rem 1.5rem;
+                border: none;
+                border-radius: 6px;
+                cursor: pointer;
+                font-weight: 600;
+                font-size: 1rem;
             }
-            @media (max-width: 480px) {
-                .container {
-                    padding: 1.5rem;
+            button:hover {
+                background: #1d4ed8;
+            }
+            button:disabled {
+                background: #9ca3af;
+                cursor: not-allowed;
+            }
+            .status-badge {
+                display: inline-block;
+                padding: 0.25rem 0.75rem;
+                border-radius: 12px;
+                font-size: 0.875rem;
+                font-weight: 600;
+            }
+            .status-queued {
+                background: #fef3c7;
+                color: #92400e;
+            }
+            .status-staged {
+                background: #dbeafe;
+                color: #1e40af;
+            }
+            .status-failed {
+                background: #fee2e2;
+                color: #991b1b;
+            }
+            .status-applied {
+                background: #dcfce7;
+                color: #166534;
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-top: 1rem;
+            }
+            th, td {
+                text-align: left;
+                padding: 0.75rem;
+                border-bottom: 1px solid #e5e7eb;
+            }
+            th {
+                background: #f3f4f6;
+                font-weight: 600;
+            }
+            .message {
+                padding: 1rem;
+                border-radius: 6px;
+                margin-bottom: 1rem;
+            }
+            .message.success {
+                background: #dcfce7;
+                color: #166534;
+                border: 1px solid #86efac;
+            }
+            .message.error {
+                background: #fee2e2;
+                color: #991b1b;
+                border: 1px solid #fca5a5;
+            }
+            @media (max-width: 640px) {
+                .navbar {
+                    flex-direction: column;
+                    gap: 1rem;
                 }
-                h1 {
-                    font-size: 1.5rem;
+                table {
+                    font-size: 0.875rem;
+                }
+                th, td {
+                    padding: 0.5rem;
                 }
             }
         </style>
     </head>
     <body>
-        <div class="container">
-            <h1>Job Application Accelerator</h1>
-            <p class="subtitle">Your AI-powered job application assistant</p>
-            <div class="status">
-                ✓ Dashboard is running
-            </div>
-            <div class="feature-list">
-                <ul>
-                    <li>Analyze job descriptions</li>
-                    <li>Tailor your resume</li>
-                    <li>Draft application answers</li>
-                    <li>Generate cover letters</li>
-                    <li>Track applications</li>
-                    <li>Mobile-responsive interface</li>
-                </ul>
-            </div>
-            <p class="footer">Phase 0 Scaffold – Coming Soon</p>
+        <div class="navbar">
+            <h1>⚡ Job Accelerator</h1>
+            <ul class="nav-links">
+                <a href="#" class="nav-link active" onclick="showTab('submit')">Submit</a>
+                <a href="#" class="nav-link" onclick="showTab('queue')">Queue</a>
+                <a href="#" class="nav-link" onclick="showTab('tracker')">Tracker</a>
+                <a href="#" class="nav-link" onclick="showTab('status')">Status</a>
+            </ul>
         </div>
+
+        <div class="container">
+            <!-- Submit Tab -->
+            <div id="submit" class="tab-content active">
+                <h2>Submit Job Description</h2>
+                <form onsubmit="submitJob(event)">
+                    <div class="form-group">
+                        <label for="jd_text">Job Description (paste text)</label>
+                        <textarea id="jd_text" placeholder="Paste the job description here..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="company">Company (optional)</label>
+                        <input type="text" id="company" placeholder="e.g., Google, Microsoft">
+                    </div>
+                    <div class="form-group">
+                        <label for="role">Role (optional)</label>
+                        <input type="text" id="role" placeholder="e.g., Senior Software Engineer">
+                    </div>
+                    <div class="form-group">
+                        <label for="location">Location (optional)</label>
+                        <input type="text" id="location" placeholder="e.g., San Francisco, CA">
+                    </div>
+                    <button type="submit">Submit & Queue</button>
+                </form>
+                <div id="submit-message"></div>
+            </div>
+
+            <!-- Job Queue Tab -->
+            <div id="queue" class="tab-content">
+                <h2>Job Queue</h2>
+                <button onclick="loadJobs()">Refresh</button>
+                <button onclick="triggerWorker()">Trigger Worker</button>
+                <div id="queue-list"></div>
+            </div>
+
+            <!-- Tracker Tab -->
+            <div id="tracker" class="tab-content">
+                <h2>Application Tracker</h2>
+                <button onclick="loadTracker()">Refresh</button>
+                <div id="tracker-list"></div>
+            </div>
+
+            <!-- Status Tab -->
+            <div id="status" class="tab-content">
+                <h2>System Status</h2>
+                <div id="status-info"></div>
+            </div>
+        </div>
+
+        <script>
+            function showTab(tabName) {
+                // Hide all tabs
+                document.querySelectorAll('.tab-content').forEach(tab => {
+                    tab.classList.remove('active');
+                });
+                // Show selected tab
+                document.getElementById(tabName).classList.add('active');
+                // Update nav links
+                document.querySelectorAll('.nav-link').forEach(link => {
+                    link.classList.remove('active');
+                });
+                event.target.classList.add('active');
+
+                // Load data for the tab
+                if (tabName === 'queue') loadJobs();
+                if (tabName === 'tracker') loadTracker();
+                if (tabName === 'status') loadStatus();
+            }
+
+            async function submitJob(event) {
+                event.preventDefault();
+                const jd_text = document.getElementById('jd_text').value;
+                const company = document.getElementById('company').value;
+                const role = document.getElementById('role').value;
+                const location = document.getElementById('location').value;
+
+                if (!jd_text) {
+                    showMessage('submit-message', 'Please enter a job description', 'error');
+                    return;
+                }
+
+                try {
+                    const response = await fetch('/api/job-queue/submit', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ jd_text, company, role, location })
+                    });
+
+                    const data = await response.json();
+                    if (response.ok) {
+                        showMessage('submit-message', `Job ${data.job_id} queued successfully!`, 'success');
+                        event.target.reset();
+                    } else {
+                        showMessage('submit-message', data.detail || 'Error submitting job', 'error');
+                    }
+                } catch (error) {
+                    showMessage('submit-message', `Error: ${error.message}`, 'error');
+                }
+            }
+
+            async function loadJobs() {
+                try {
+                    const response = await fetch('/api/job-queue/all');
+                    const data = await response.json();
+
+                    let html = '<table><thead><tr><th>ID</th><th>Company</th><th>Role</th><th>Status</th><th>Created</th></tr></thead><tbody>';
+                    data.jobs.forEach(job => {
+                        const status = job.status || 'unknown';
+                        const created = new Date(job.created_at).toLocaleDateString();
+                        html += `<tr><td>${job.id}</td><td>${job.company || '-'}</td><td>${job.role || '-'}</td><td><span class="status-badge status-${status}">${status}</span></td><td>${created}</td></tr>`;
+                    });
+                    html += '</tbody></table>';
+                    document.getElementById('queue-list').innerHTML = html;
+                } catch (error) {
+                    document.getElementById('queue-list').innerHTML = `<p style="color: red;">Error loading jobs: ${error.message}</p>`;
+                }
+            }
+
+            async function loadTracker() {
+                try {
+                    const response = await fetch('/api/tracker/all');
+                    const data = await response.json();
+
+                    let html = '<table><thead><tr><th>Company</th><th>Role</th><th>Status</th><th>Location</th><th>Created</th></tr></thead><tbody>';
+                    data.entries.forEach(entry => {
+                        const status = entry.status || 'unknown';
+                        const created = new Date(entry.created_at).toLocaleDateString();
+                        html += `<tr><td>${entry.company}</td><td>${entry.role}</td><td><span class="status-badge status-${status}">${status}</span></td><td>${entry.location || '-'}</td><td>${created}</td></tr>`;
+                    });
+                    html += '</tbody></table>';
+                    document.getElementById('tracker-list').innerHTML = html;
+                } catch (error) {
+                    document.getElementById('tracker-list').innerHTML = `<p style="color: red;">Error loading tracker: ${error.message}</p>`;
+                }
+            }
+
+            async function loadStatus() {
+                try {
+                    const health = await fetch('/health').then(r => r.json());
+                    const worker = await fetch('/api/worker/status').then(r => r.json());
+
+                    let html = `<div>
+                        <p><strong>API Key Present:</strong> ${health.api_key_present ? '✓' : '✗'}</p>
+                        <p><strong>Scheduler Running:</strong> ${health.scheduler_running ? '✓' : '✗'}</p>
+                        <p><strong>Scheduler Jobs:</strong> ${worker.scheduler_jobs.length}</p>
+                    </div>`;
+
+                    if (worker.scheduler_jobs.length > 0) {
+                        html += '<h3>Scheduled Jobs</h3><ul>';
+                        worker.scheduler_jobs.forEach(job => {
+                            html += `<li>${job.name} (Next: ${new Date(job.next_run_time).toLocaleString()})</li>`;
+                        });
+                        html += '</ul>';
+                    }
+
+                    document.getElementById('status-info').innerHTML = html;
+                } catch (error) {
+                    document.getElementById('status-info').innerHTML = `<p style="color: red;">Error loading status: ${error.message}</p>`;
+                }
+            }
+
+            async function triggerWorker() {
+                try {
+                    const response = await fetch('/api/worker/trigger', { method: 'POST' });
+                    const data = await response.json();
+                    if (response.ok) {
+                        showMessage('queue-list', 'Worker triggered! Processing jobs...', 'success');
+                        setTimeout(loadJobs, 2000);
+                    } else {
+                        showMessage('queue-list', `Error: ${data.detail}`, 'error');
+                    }
+                } catch (error) {
+                    showMessage('queue-list', `Error: ${error.message}`, 'error');
+                }
+            }
+
+            function showMessage(elementId, message, type) {
+                const element = document.getElementById(elementId);
+                if (!element) return;
+                element.innerHTML = `<div class="message ${type}">${message}</div>`;
+                setTimeout(() => { element.innerHTML = ''; }, 5000);
+            }
+        </script>
     </body>
     </html>
     """
