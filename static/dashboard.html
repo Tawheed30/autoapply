@@ -781,8 +781,9 @@
         (function() {
             const token = safeStorage.getItem('token');
             if (!token) {
-                // No token, redirect to login immediately
+                // No token, redirect to login with visual feedback
                 console.log('No auth token found, redirecting to login...');
+                document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;background:#f9fafb;font-family:system-ui"><div style="text-align:center"><div style="font-size:3rem;margin-bottom:1rem">⚡</div><h1 style="color:#1f2937;margin:0 0 0.5rem">AutoApply</h1><p style="color:#6b7280;margin:0">Redirecting to login...</p></div></div>';
                 window.location.replace('/login');
                 // Stop all further execution
                 throw new Error('Redirecting to login');
