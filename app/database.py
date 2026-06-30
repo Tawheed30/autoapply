@@ -22,6 +22,20 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
 
+        # Users table (for website authentication)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                password_salt TEXT NOT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                is_active INTEGER DEFAULT 1
+            )
+        """)
+
         # Activity log table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS activity_log (
@@ -31,7 +45,9 @@ class Database:
                 target TEXT,
                 details TEXT,
                 result TEXT,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                user_id TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
             )
         """)
 
@@ -158,16 +174,52 @@ class Database:
         conn.close()
         logger.info(f"Database initialized at {self.db_path}")
 
-    def log_activity(self, action: str, target: str = None, details: str = None, result: str = None):
+    def log_activity(self, action: str, target: str = None, details: str = None, result: str = None, user_id: str = None):
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO activity_log (timestamp, action, target, details, result)
-            VALUES (?, ?, ?, ?, ?)
-        """, (datetime.utcnow().isoformat(), action, target, details, result))
+            INSERT INTO activity_log (timestamp, action, target, details, result, user_id)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (datetime.utcnow().isoformat(), action, target, details, result, user_id))
         conn.commit()
         conn.close()
         logger.info(f"Activity logged: {action} - {target}")
+
+    def create_user(self, user_id: str, name: str, email: str, password_hash: str, password_salt: str):
+        """Create a new user."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("""
+                INSERT INTO users (id, name, email, password_hash, password_salt)
+                VALUES (?, ?, ?, ?, ?)
+            """, (user_id, name, email, password_hash, password_salt))
+            conn.commit()
+            logger.info(f"User created: {email}")
+            return True
+        except sqlite3.IntegrityError:
+            logger.warning(f"User already exists: {email}")
+            return False
+        finally:
+            conn.close()
+
+    def get_user_by_email(self, email: str):
+        """Get user by email."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
+        user = cursor.fetchone()
+        conn.close()
+        return dict(user) if user else None
+
+    def get_user_by_id(self, user_id: str):
+        """Get user by ID."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+        user = cursor.fetchone()
+        conn.close()
+        return dict(user) if user else None
 
     def add_job_to_queue(self, jd_text: str = None, jd_url: str = None,
                          company: str = None, role: str = None, location: str = None):

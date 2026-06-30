@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoApply - Accelerate Your Job Search</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #1f2937;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .navbar {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .navbar-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #667eea;
+            text-decoration: none;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            list-style: none;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: #1f2937;
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+
+        .nav-links a:hover {
+            color: #667eea;
+        }
+
+        .auth-buttons {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s;
+            border: none;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+
+        .btn-login {
+            background: transparent;
+            color: #667eea;
+            border: 2px solid #667eea;
+        }
+
+        .btn-login:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-signup {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-signup:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .hero {
+            max-width: 1200px;
+            margin: 4rem auto 2rem;
+            padding: 0 2rem;
+            text-align: center;
+            color: white;
+        }
+
+        .hero h1 {
+            font-size: 3.5rem;
+            margin-bottom: 1rem;
+            font-weight: 800;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .hero p {
+            font-size: 1.25rem;
+            margin-bottom: 2rem;
+            opacity: 0.95;
+        }
+
+        .cta-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-bottom: 4rem;
+        }
+
+        .btn-primary {
+            background: white;
+            color: #667eea;
+            padding: 1rem 2rem;
+            font-size: 1.1rem;
+            font-weight: 700;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .features {
+            background: white;
+            padding: 4rem 2rem;
+            margin-top: 2rem;
+        }
+
+        .features-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .features h2 {
+            font-size: 2.5rem;
+            text-align: center;
+            margin-bottom: 3rem;
+            color: #1f2937;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2rem;
+        }
+
+        .feature-card {
+            padding: 2rem;
+            border-radius: 1rem;
+            background: #f9fafb;
+            border: 2px solid #e5e7eb;
+            transition: all 0.3s;
+        }
+
+        .feature-card:hover {
+            border-color: #667eea;
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.1);
+            transform: translateY(-5px);
+        }
+
+        .feature-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .feature-card h3 {
+            color: #1f2937;
+            margin-bottom: 0.5rem;
+        }
+
+        .feature-card p {
+            color: #6b7280;
+        }
+
+        .pricing {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 4rem 2rem;
+            color: white;
+        }
+
+        .pricing-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .pricing h2 {
+            font-size: 2.5rem;
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+
+        .pricing-card {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 2rem;
+            border-radius: 1rem;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            transition: all 0.3s;
+        }
+
+        .pricing-card:hover {
+            border-color: white;
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .pricing-card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .price {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin: 1rem 0;
+        }
+
+        .features-list {
+            list-style: none;
+            margin: 1.5rem 0;
+        }
+
+        .features-list li {
+            padding: 0.5rem 0;
+            display: flex;
+            align-items: center;
+        }
+
+        .features-list li:before {
+            content: "✓";
+            margin-right: 0.75rem;
+            font-weight: 800;
+        }
+
+        .btn-card {
+            width: 100%;
+            background: white;
+            color: #667eea;
+            margin-top: 1.5rem;
+        }
+
+        .btn-card:hover {
+            background: #f9fafb;
+        }
+
+        .stats {
+            background: white;
+            padding: 4rem 2rem;
+        }
+
+        .stats-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 2rem;
+            text-align: center;
+        }
+
+        .stat {
+            padding: 2rem;
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: #667eea;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            color: #6b7280;
+            font-weight: 500;
+        }
+
+        .footer {
+            background: #1f2937;
+            color: white;
+            padding: 2rem;
+            text-align: center;
+        }
+
+        .footer-content {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            margin-bottom: 1rem;
+        }
+
+        .footer-links a {
+            color: #9ca3af;
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+
+        .footer-links a:hover {
+            color: white;
+        }
+
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2rem;
+            }
+
+            .hero p {
+                font-size: 1rem;
+            }
+
+            .nav-links {
+                display: none;
+            }
+
+            .cta-buttons {
+                flex-direction: column;
+            }
+
+            .btn-primary {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-content">
+            <a href="/" class="logo">⚡ AutoApply</a>
+            <ul class="nav-links">
+                <li><a href="#features">Features</a></li>
+                <li><a href="#pricing">Pricing</a></li>
+                <li><a href="#faq">FAQ</a></li>
+            </ul>
+            <div class="auth-buttons">
+                <a href="/login" class="btn btn-login">Login</a>
+                <a href="/signup" class="btn btn-signup">Get Started</a>
+            </div>
+        </div>
+    </nav>
+
+    <section class="hero">
+        <h1>Accelerate Your Job Search</h1>
+        <p>Let AI handle your applications. Submit smarter, apply faster, get hired sooner.</p>
+        <div class="cta-buttons">
+            <a href="/signup" class="btn btn-primary">Start Free Trial</a>
+        </div>
+    </section>
+
+    <section class="features" id="features">
+        <div class="features-container">
+            <h2>Powerful Features</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">📝</div>
+                    <h3>Smart Applications</h3>
+                    <p>Automatically fill applications with personalized answers based on your resume and experience.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <h3>Lightning Fast</h3>
+                    <p>Process applications in seconds. What takes hours manually takes minutes with AutoApply.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <h3>Track Everything</h3>
+                    <p>Monitor all your applications in one dashboard. See status, notes, and analytics at a glance.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🤖</div>
+                    <h3>AI-Powered Responses</h3>
+                    <p>Get intelligent, contextual answers to screening questions from our advanced AI model.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📱</div>
+                    <h3>Mobile First</h3>
+                    <p>Manage your job search on the go. Full functionality on desktop, tablet, and mobile.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔒</div>
+                    <h3>Secure & Private</h3>
+                    <p>Your data stays yours. Enterprise-grade security with zero data sharing.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="stats">
+        <div class="stats-container">
+            <div class="stat">
+                <div class="stat-number">10,000+</div>
+                <div class="stat-label">Applications Submitted</div>
+            </div>
+            <div class="stat">
+                <div class="stat-number">2,500+</div>
+                <div class="stat-label">Happy Users</div>
+            </div>
+            <div class="stat">
+                <div class="stat-number">45%</div>
+                <div class="stat-label">Time Saved</div>
+            </div>
+            <div class="stat">
+                <div class="stat-number">24/7</div>
+                <div class="stat-label">Uptime</div>
+            </div>
+        </div>
+    </section>
+
+    <section class="pricing" id="pricing">
+        <div class="pricing-container">
+            <h2>Simple, Transparent Pricing</h2>
+            <div class="pricing-grid">
+                <div class="pricing-card">
+                    <h3>Starter</h3>
+                    <div class="price">Free</div>
+                    <ul class="features-list">
+                        <li>50 applications/month</li>
+                        <li>Basic tracking</li>
+                        <li>Email support</li>
+                    </ul>
+                    <button class="btn btn-card">Get Started</button>
+                </div>
+                <div class="pricing-card">
+                    <h3>Professional</h3>
+                    <div class="price">$29<span style="font-size: 0.8rem">/mo</span></div>
+                    <ul class="features-list">
+                        <li>Unlimited applications</li>
+                        <li>Advanced tracking</li>
+                        <li>Cover letter generator</li>
+                        <li>Priority support</li>
+                        <li>Resume optimization</li>
+                    </ul>
+                    <button class="btn btn-card">Try for 7 Days</button>
+                </div>
+                <div class="pricing-card">
+                    <h3>Enterprise</h3>
+                    <div class="price">Custom</div>
+                    <ul class="features-list">
+                        <li>Everything in Pro</li>
+                        <li>Team collaboration</li>
+                        <li>Custom integrations</li>
+                        <li>Dedicated support</li>
+                        <li>SLA guarantee</li>
+                    </ul>
+                    <button class="btn btn-card">Contact Sales</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="features" style="background: #f9fafb;">
+        <div class="features-container">
+            <h2>Frequently Asked Questions</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <h3>How does AutoApply work?</h3>
+                    <p>Upload your resume and experience. AutoApply analyzes job descriptions and automatically fills applications with personalized, AI-generated responses.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Is my data secure?</h3>
+                    <p>Yes. We use enterprise-grade encryption and never share your data. All information is stored securely and backed up daily.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Can I edit AI responses?</h3>
+                    <p>Absolutely. All AI-generated content is reviewed and editable by you before submission to ensure it matches your voice.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>What's the free trial?</h3>
+                    <p>7 days full access to Professional features. No credit card required. Cancel anytime.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Do you integrate with job boards?</h3>
+                    <p>Yes. We support LinkedIn, Indeed, Glassdoor, and most career platforms with direct application integration.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>How much time will I save?</h3>
+                    <p>On average, users save 10+ hours per week. Applications that took 30 minutes now take 2-3 minutes.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-links">
+                <a href="/privacy">Privacy Policy</a>
+                <a href="/terms">Terms of Service</a>
+                <a href="/contact">Contact</a>
+                <a href="https://twitter.com">Twitter</a>
+                <a href="https://github.com">GitHub</a>
+            </div>
+            <p>&copy; 2024 AutoApply. All rights reserved. Made with ⚡ for job seekers.</p>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,14 +1,15 @@
 import logging
 import os
+import uuid
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Header, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Header, WebSocket, WebSocketDisconnect, Depends
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 import json
-from typing import Set
+from typing import Set, Optional
 
 from app.config import Config
 from app.database import Database
@@ -18,6 +19,7 @@ from app.tracker import TrackerManager
 from app.background_worker import BackgroundWorker
 from app.question_answer_manager import QuestionAnswerManager
 from app.cover_letter_manager import CoverLetterManager
+from app.auth import AuthManager, UserSignup, UserCredentials
 
 # Load config
 config = Config()
@@ -34,6 +36,9 @@ logger = logging.getLogger(__name__)
 
 # Initialize database
 db = Database(config.get("data.db_path"))
+
+# Initialize auth manager
+auth_manager = AuthManager()
 
 # Initialize managers
 queue_manager = JobQueueManager(db)
@@ -104,6 +109,123 @@ def health_check():
         api_key_present=bool(config.get_api_key()),
         scheduler_running=scheduler_running
     )
+
+
+def get_current_user(authorization: Optional[str] = Header(None)):
+    """Verify JWT token and return user data."""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing authorization header")
+
+    token = auth_manager.extract_token_from_header(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="Invalid authorization header format")
+
+    token_data = auth_manager.verify_token(token)
+    if not token_data:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    user = db.get_user_by_id(token_data.user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    return user
+
+
+# ==================== PUBLIC PAGES ====================
+
+@app.get("/", response_class=HTMLResponse)
+def landing_page():
+    """Landing page."""
+    with open("templates/landing.html", "r") as f:
+        return f.read()
+
+
+@app.get("/signup", response_class=HTMLResponse)
+def signup_page():
+    """Signup page."""
+    with open("templates/signup.html", "r") as f:
+        return f.read()
+
+
+@app.get("/login", response_class=HTMLResponse)
+def login_page():
+    """Login page."""
+    with open("templates/login.html", "r") as f:
+        return f.read()
+
+
+# ==================== AUTHENTICATION ENDPOINTS ====================
+
+@app.post("/api/auth/signup")
+def signup(request: UserSignup):
+    """Create a new user account."""
+    # Check if user exists
+    existing_user = db.get_user_by_email(request.email)
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    # Hash password
+    pwd_hash, salt = auth_manager.hash_password(request.password)
+
+    # Create user
+    user_id = str(uuid.uuid4())
+    success = db.create_user(
+        user_id=user_id,
+        name=request.name,
+        email=request.email,
+        password_hash=pwd_hash,
+        password_salt=salt
+    )
+
+    if not success:
+        raise HTTPException(status_code=400, detail="Failed to create account")
+
+    # Create token
+    token = auth_manager.create_token(user_id, request.email)
+
+    db.log_activity("user_signup", f"user_id:{user_id}", f"email:{request.email}", "success", user_id)
+
+    return {
+        "user_id": user_id,
+        "email": request.email,
+        "name": request.name,
+        "token": token
+    }
+
+
+@app.post("/api/auth/login")
+def login(request: UserCredentials):
+    """Authenticate user and return JWT token."""
+    user = db.get_user_by_email(request.email)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    # Verify password
+    if not auth_manager.verify_password(request.password, user["password_hash"], user["password_salt"]):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    # Create token
+    token = auth_manager.create_token(user["id"], user["email"])
+
+    db.log_activity("user_login", f"user_id:{user['id']}", f"email:{user['email']}", "success", user["id"])
+
+    return {
+        "user_id": user["id"],
+        "email": user["email"],
+        "name": user["name"],
+        "token": token
+    }
+
+
+@app.get("/api/auth/me")
+def get_current_user_info(user: dict = Depends(get_current_user)):
+    """Get current user information."""
+    return {
+        "user_id": user["id"],
+        "email": user["email"],
+        "name": user["name"],
+        "created_at": user["created_at"]
+    }
 
 
 class JobQueueRequest(BaseModel):
@@ -331,9 +453,9 @@ def approve_cover_letter(job_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/")
-async def dashboard():
-    """Serve the dashboard homepage."""
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard(user: dict = Depends(get_current_user)):
+    """Serve the dashboard homepage (authenticated)."""
     # Read dashboard from static file, with fallback to inline
     try:
         app_dir = os.path.dirname(os.path.abspath(__file__))
@@ -341,10 +463,13 @@ async def dashboard():
         dashboard_path = os.path.join(project_dir, "static", "dashboard.html")
 
         with open(dashboard_path, 'r') as f:
-            return HTMLResponse(f.read())
+            html_content = f.read()
+            # Inject user info into the dashboard
+            html_content = html_content.replace("<!-- USER_NAME -->", f"<script>window.currentUser = {json.dumps({'name': user['name'], 'email': user['email']})}</script>")
+            return html_content
     except Exception as e:
         logger.error(f"Error loading dashboard: {e}")
-        return HTMLResponse("""<!DOCTYPE html>
+        return """<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -372,7 +497,7 @@ async def dashboard():
         </div>
     </div>
 </body>
-</html>""", status_code=200)
+</html>"""
 
 
 @app.websocket("/ws/updates")
