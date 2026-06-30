@@ -619,6 +619,10 @@
     <div class="header">
         <h1>⚡ AutoApply</h1>
         <div class="offline-badge" id="offlineBadge">Offline Mode</div>
+        <div style="margin-left: auto; display: flex; gap: 1rem; align-items: center;">
+            <span id="userInfo" style="font-size: 0.9rem; color: #6b7280;"></span>
+            <button onclick="logout()" style="padding: 0.5rem 1rem; background: #dc2626; color: white; border: none; border-radius: 0.4rem; cursor: pointer; font-weight: 600;">Logout</button>
+        </div>
     </div>
 
     <div class="main-content">
@@ -735,6 +739,38 @@
     </div>
 
     <script>
+        // Authentication Check - Must be first!
+        function checkAuthentication() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                // No token, redirect to login
+                window.location.href = '/login';
+                return false;
+            }
+            return true;
+        }
+
+        // Check auth before page loads
+        if (!checkAuthentication()) {
+            throw new Error('Not authenticated');
+        }
+
+        // Helper function for authenticated API calls
+        function authenticatedFetch(url, options = {}) {
+            const token = localStorage.getItem('token');
+            const headers = {
+                'Content-Type': 'application/json',
+                ...options.headers
+            };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+            return fetch(url, {
+                ...options,
+                headers
+            });
+        }
+
         // Global state
         let currentJob = null;
         let currentQuestionId = null;
@@ -748,8 +784,32 @@
             });
         }
 
+        // Logout function
+        function logout() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('email');
+            window.location.href = '/login';
+        }
+
+        // Load user info
+        async function loadUserInfo() {
+            try {
+                const response = await authenticatedFetch('/api/auth/me');
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('userInfo').textContent = `👤 ${data.name}`;
+                } else if (response.status === 401) {
+                    // Token expired
+                    logout();
+                }
+            } catch (error) {
+                console.error('Error loading user info:', error);
+            }
+        }
+
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
+            loadUserInfo();
             loadJobs();
             loadTracker();
             loadApplications();
@@ -802,7 +862,7 @@
             const location = document.getElementById('location').value;
 
             try {
-                const response = await fetch('/api/job-queue/submit', {
+                const response = await authenticatedFetch('/api/job-queue/submit', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ jd_text, company, role, location })
@@ -822,7 +882,7 @@
 
         async function loadJobs() {
             try {
-                const response = await fetch('/api/job-queue/all');
+                const response = await authenticatedFetch('/api/job-queue/all');
                 const data = await response.json();
 
                 let html = '<table><thead><tr><th>Company</th><th>Role</th><th>Status</th><th>Created</th></tr></thead><tbody>';
@@ -840,7 +900,7 @@
 
         async function loadTracker() {
             try {
-                const response = await fetch('/api/tracker/all');
+                const response = await authenticatedFetch('/api/tracker/all');
                 const data = await response.json();
 
                 let html = '';
@@ -871,16 +931,16 @@
 
         async function loadApplications() {
             try {
-                const queueResponse = await fetch('/api/job-queue/status/staged');
+                const queueResponse = await authenticatedFetch('/api/job-queue/status/staged');
                 const queueData = await queueResponse.json();
 
                 let questionsHtml = '';
                 let coverLettersHtml = '';
 
                 for (const job of (queueData.jobs || [])) {
-                    const qResponse = await fetch(`/api/questions/${job.id}`);
+                    const qResponse = await authenticatedFetch(`/api/questions/${job.id}`);
                     const qData = await qResponse.json();
-                    const clResponse = await fetch(`/api/cover-letters/${job.id}`);
+                    const clResponse = await authenticatedFetch(`/api/cover-letters/${job.id}`);
                     const clData = await clResponse.json();
 
                     // Questions section
@@ -948,8 +1008,8 @@
 
         async function loadStatus() {
             try {
-                const health = await fetch('/health').then(r => r.json());
-                const worker = await fetch('/api/worker/status').then(r => r.json());
+                const health = await authenticatedFetch('/health').then(r => r.json());
+                const worker = await authenticatedFetch('/api/worker/status').then(r => r.json());
 
                 let html = `<div style="background: white; padding: 1rem; border-radius: 6px; margin-bottom: 1rem;">
                     <p><strong>API Key:</strong> ${health.api_key_present ? '✓ Present' : '✗ Missing'}</p>
@@ -1028,7 +1088,7 @@
 
         async function approveAnswers(jobId) {
             try {
-                const response = await fetch(`/api/questions/${jobId}/approve-all`, { method: 'POST' });
+                const response = await authenticatedFetch(`/api/questions/${jobId}/approve-all`, { method: 'POST' });
                 const data = await response.json();
                 if (response.ok) {
                     showNotification('All answers approved!', 'success');
@@ -1043,7 +1103,7 @@
 
         async function approveCoverLetter(jobId) {
             try {
-                const response = await fetch(`/api/cover-letters/${jobId}/approve`, { method: 'POST' });
+                const response = await authenticatedFetch(`/api/cover-letters/${jobId}/approve`, { method: 'POST' });
                 const data = await response.json();
                 if (response.ok) {
                     showNotification('Cover letter approved!', 'success');
@@ -1070,7 +1130,7 @@
 
         async function triggerWorker() {
             try {
-                const response = await fetch('/api/worker/trigger', { method: 'POST' });
+                const response = await authenticatedFetch('/api/worker/trigger', { method: 'POST' });
                 const data = await response.json();
                 showNotification('Worker triggered!', 'success');
                 setTimeout(loadJobs, 2000);
