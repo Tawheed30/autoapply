@@ -154,6 +154,20 @@ def login_page():
         return f.read()
 
 
+@app.get("/privacy", response_class=HTMLResponse)
+def privacy_page():
+    """Privacy policy page."""
+    with open("templates/privacy.html", "r") as f:
+        return f.read()
+
+
+@app.get("/terms", response_class=HTMLResponse)
+def terms_page():
+    """Terms of service page."""
+    with open("templates/terms.html", "r") as f:
+        return f.read()
+
+
 # ==================== AUTHENTICATION ENDPOINTS ====================
 
 @app.post("/api/auth/signup")

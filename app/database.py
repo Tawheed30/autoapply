@@ -51,6 +51,16 @@ class Database:
             )
         """)
 
+        # Migrate existing activity_log table if needed
+        try:
+            cursor.execute("PRAGMA table_info(activity_log)")
+            columns = [row[1] for row in cursor.fetchall()]
+            if "user_id" not in columns:
+                logger.info("Migrating activity_log table: adding user_id column")
+                cursor.execute("ALTER TABLE activity_log ADD COLUMN user_id TEXT")
+        except Exception as e:
+            logger.warning(f"Could not check activity_log columns: {e}")
+
         # Job queue table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS job_queue (
