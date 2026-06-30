@@ -334,36 +334,45 @@ def approve_cover_letter(job_id: int):
 @app.get("/")
 async def dashboard():
     """Serve the dashboard homepage."""
-    # Get the directory where this app file is located
-    app_dir = os.path.dirname(os.path.abspath(__file__))
-    project_dir = os.path.dirname(app_dir)
-    dashboard_path = os.path.join(project_dir, "static", "dashboard.html")
+    # Read dashboard from static file, with fallback to inline
+    try:
+        app_dir = os.path.dirname(os.path.abspath(__file__))
+        project_dir = os.path.dirname(app_dir)
+        dashboard_path = os.path.join(project_dir, "static", "dashboard.html")
 
-    if os.path.exists(dashboard_path):
-        return FileResponse(dashboard_path, media_type="text/html")
-
-    # Fallback to inline HTML if file not found
-    return HTMLResponse("""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Job Application Accelerator</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-            body { font-family: system-ui; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #f0f4ff; }
-            .card { background: white; padding: 2rem; border-radius: 8px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-            h1 { color: #2563eb; }
-        </style>
-    </head>
-    <body>
-        <div class="card">
-            <h1>⚡ Job Application Accelerator</h1>
-            <p>Dashboard file not found at: """ + dashboard_path + """</p>
-            <p><a href="/health">Check health</a></p>
+        with open(dashboard_path, 'r') as f:
+            return HTMLResponse(f.read())
+    except Exception as e:
+        logger.error(f"Error loading dashboard: {e}")
+        return HTMLResponse("""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoApply - Job Application Accelerator</title>
+    <meta name="theme-color" content="#1f2937">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f9fafb; color: #1f2937; display: flex; flex-direction: column; height: 100vh; }
+        .header { background: white; border-bottom: 1px solid #e5e7eb; padding: 1rem; text-align: center; }
+        .header h1 { font-size: 1.5rem; }
+        .content { flex: 1; padding: 2rem; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        .error { background: #fee2e2; color: #991b1b; padding: 1rem; border-radius: 6px; max-width: 500px; text-align: center; }
+        button { background: #2563eb; color: white; padding: 0.75rem 1.5rem; border: none; border-radius: 6px; cursor: pointer; font-size: 1rem; margin-top: 1rem; }
+    </style>
+</head>
+<body>
+    <div class="header"><h1>⚡ AutoApply</h1></div>
+    <div class="content">
+        <div class="error">
+            <h2>Dashboard Loading Error</h2>
+            <p>The dashboard failed to load.</p>
+            <p><small>Error: """ + str(e) + """</small></p>
+            <button onclick="location.reload()">Retry</button>
         </div>
-    </body>
-    </html>
-    """, status_code=200)
+    </div>
+</body>
+</html>""", status_code=200)
 
 
 @app.websocket("/ws/updates")
