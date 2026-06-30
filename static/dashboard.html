@@ -778,20 +778,16 @@
         };
 
         // Authentication Check - Must be first!
-        function checkAuthentication() {
+        (function() {
             const token = safeStorage.getItem('token');
             if (!token) {
-                // No token, redirect to login
-                window.location.href = '/login';
-                return false;
+                // No token, redirect to login immediately
+                console.log('No auth token found, redirecting to login...');
+                window.location.replace('/login');
+                // Stop all further execution
+                throw new Error('Redirecting to login');
             }
-            return true;
-        }
-
-        // Check auth before page loads
-        if (!checkAuthentication()) {
-            throw new Error('Not authenticated');
-        }
+        })();
 
         // Helper function for authenticated API calls
         function authenticatedFetch(url, options = {}) {
