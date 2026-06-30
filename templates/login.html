@@ -293,10 +293,22 @@
                 const data = await response.json();
 
                 if (response.ok) {
-                    // Store token
-                    localStorage.setItem('token', data.token);
-                    if (remember) {
-                        localStorage.setItem('email', email);
+                    // Store token (with fallback for sandboxed environments)
+                    try {
+                        localStorage.setItem('token', data.token);
+                        if (remember) {
+                            localStorage.setItem('email', email);
+                        }
+                    } catch (e) {
+                        // Fallback to sessionStorage if localStorage unavailable
+                        try {
+                            sessionStorage.setItem('token', data.token);
+                            if (remember) {
+                                sessionStorage.setItem('email', email);
+                            }
+                        } catch (e2) {
+                            console.warn('Storage unavailable, token not persisted');
+                        }
                     }
                     showSuccess('Sign in successful! Redirecting...');
                     setTimeout(() => {
@@ -327,9 +339,18 @@
             successDiv.classList.add('show');
         }
 
-        // Autofill email if remembered
+        // Autofill email if remembered (with fallback)
         window.addEventListener('load', () => {
-            const rememberedEmail = localStorage.getItem('email');
+            let rememberedEmail = null;
+            try {
+                rememberedEmail = localStorage.getItem('email');
+            } catch (e) {
+                try {
+                    rememberedEmail = sessionStorage.getItem('email');
+                } catch (e2) {
+                    console.warn('Storage unavailable');
+                }
+            }
             if (rememberedEmail) {
                 document.getElementById('email').value = rememberedEmail;
                 document.getElementById('remember').checked = true;

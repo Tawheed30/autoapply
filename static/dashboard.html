@@ -739,9 +739,47 @@
     </div>
 
     <script>
+        // Safe localStorage wrapper for sandboxed environments
+        const safeStorage = {
+            getItem: (key) => {
+                try {
+                    return localStorage.getItem(key);
+                } catch (e) {
+                    console.warn('localStorage access blocked, using sessionStorage as fallback');
+                    try {
+                        return sessionStorage.getItem(key);
+                    } catch (e2) {
+                        return null;
+                    }
+                }
+            },
+            setItem: (key, value) => {
+                try {
+                    localStorage.setItem(key, value);
+                } catch (e) {
+                    try {
+                        sessionStorage.setItem(key, value);
+                    } catch (e2) {
+                        console.warn('No storage available');
+                    }
+                }
+            },
+            removeItem: (key) => {
+                try {
+                    localStorage.removeItem(key);
+                } catch (e) {
+                    try {
+                        sessionStorage.removeItem(key);
+                    } catch (e2) {
+                        console.warn('No storage available for removal');
+                    }
+                }
+            }
+        };
+
         // Authentication Check - Must be first!
         function checkAuthentication() {
-            const token = localStorage.getItem('token');
+            const token = safeStorage.getItem('token');
             if (!token) {
                 // No token, redirect to login
                 window.location.href = '/login';
@@ -757,7 +795,7 @@
 
         // Helper function for authenticated API calls
         function authenticatedFetch(url, options = {}) {
-            const token = localStorage.getItem('token');
+            const token = safeStorage.getItem('token');
             const headers = {
                 'Content-Type': 'application/json',
                 ...options.headers
@@ -786,8 +824,8 @@
 
         // Logout function
         function logout() {
-            localStorage.removeItem('token');
-            localStorage.removeItem('email');
+            safeStorage.removeItem('token');
+            safeStorage.removeItem('email');
             window.location.href = '/login';
         }
 

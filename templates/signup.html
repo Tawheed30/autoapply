@@ -404,6 +404,16 @@
                 const data = await response.json();
 
                 if (response.ok) {
+                    // Store token with fallback for sandboxed environments
+                    try {
+                        localStorage.setItem('token', data.token);
+                    } catch (e) {
+                        try {
+                            sessionStorage.setItem('token', data.token);
+                        } catch (e2) {
+                            console.warn('Storage unavailable, token not persisted');
+                        }
+                    }
                     showSuccess('Account created! Redirecting to dashboard...');
                     setTimeout(() => {
                         window.location.href = '/dashboard';
