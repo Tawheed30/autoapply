@@ -334,10 +334,36 @@ def approve_cover_letter(job_id: int):
 @app.get("/")
 async def dashboard():
     """Serve the dashboard homepage."""
-    dashboard_path = os.path.join("static", "dashboard.html")
+    # Get the directory where this app file is located
+    app_dir = os.path.dirname(os.path.abspath(__file__))
+    project_dir = os.path.dirname(app_dir)
+    dashboard_path = os.path.join(project_dir, "static", "dashboard.html")
+
     if os.path.exists(dashboard_path):
         return FileResponse(dashboard_path, media_type="text/html")
-    return HTMLResponse("<h1>Dashboard file not found</h1>", status_code=404)
+
+    # Fallback to inline HTML if file not found
+    return HTMLResponse("""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Job Application Accelerator</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            body { font-family: system-ui; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #f0f4ff; }
+            .card { background: white; padding: 2rem; border-radius: 8px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+            h1 { color: #2563eb; }
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <h1>⚡ Job Application Accelerator</h1>
+            <p>Dashboard file not found at: """ + dashboard_path + """</p>
+            <p><a href="/health">Check health</a></p>
+        </div>
+    </body>
+    </html>
+    """, status_code=200)
 
 
 @app.websocket("/ws/updates")
