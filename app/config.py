@@ -28,6 +28,12 @@ class Config:
             self.config["data"]["base_dir"] = base_dir
             self.config["data"]["db_path"] = os.path.join(base_dir, "accelerator.db")
 
+        # Use /tmp for database on Vercel (ephemeral filesystem)
+        if os.environ.get("ENVIRONMENT") == "production":
+            self.config["data"]["base_dir"] = "/tmp"
+            self.config["data"]["db_path"] = "/tmp/accelerator.db"
+            self.config["logging"]["file"] = "/tmp/accelerator.log"
+
     def get(self, key: str, default=None):
         """Get a config value using dot notation (e.g., 'app.port')."""
         keys = key.split('.')
