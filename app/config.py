@@ -25,14 +25,24 @@ class Config:
             self.config["app"]["port"] = int(os.environ["APP_PORT"])
         if "DATA_BASE_DIR" in os.environ:
             base_dir = os.path.expanduser(os.environ["DATA_BASE_DIR"])
-            self.config["data"]["base_dir"] = base_dir
-            self.config["data"]["db_path"] = os.path.join(base_dir, "accelerator.db")
+            self._rebase_data_dir(base_dir)
 
         # Use /tmp for database on Vercel (ephemeral filesystem)
         if os.environ.get("ENVIRONMENT") == "production":
-            self.config["data"]["base_dir"] = "/tmp"
-            self.config["data"]["db_path"] = "/tmp/accelerator.db"
+            self._rebase_data_dir("/tmp")
             self.config["logging"]["file"] = "/tmp/accelerator.log"
+
+    def _rebase_data_dir(self, base_dir: str):
+        """Point every data subdirectory (db, resumes, tailored output,
+        tracker backups) at base_dir. Previously only db_path was rebased,
+        so resume uploads/tailoring/tracker backups silently kept writing
+        to the relative "data/..." default -- which is read-only on Vercel's
+        ephemeral filesystem and diverges from a user-set DATA_BASE_DIR."""
+        self.config["data"]["base_dir"] = base_dir
+        self.config["data"]["db_path"] = os.path.join(base_dir, "accelerator.db")
+        self.config["data"]["resume_dir"] = os.path.join(base_dir, "resumes")
+        self.config["data"]["tailored_resume_dir"] = os.path.join(base_dir, "tailored")
+        self.config["data"]["tracker_backup_dir"] = os.path.join(base_dir, "tracker_backups")
 
     def get(self, key: str, default=None):
         """Get a config value using dot notation (e.g., 'app.port')."""
